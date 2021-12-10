@@ -1,3 +1,6 @@
 [submodule "simple_simulator"]
 	path = src/simple_simulator
 	url = ../../ros2_packages/simple_simulator.git
+[submodule "src/emergency_stop_msgs"]
+	path = src/emergency_stop_msgs
+	url = ../../ros2_packages/emergency_stop_msgs.git
