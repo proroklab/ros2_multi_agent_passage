@@ -4,3 +4,6 @@
 [submodule "src/emergency_stop_msgs"]
 	path = src/emergency_stop_msgs
 	url = ../../ros2_packages/emergency_stop_msgs.git
+[submodule "src/robomaster_msgs"]
+	path = src/robomaster_msgs
+	url = ../../ros2_packages/robomaster_msgs.git
