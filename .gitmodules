@@ -7,3 +7,6 @@
 [submodule "src/robomaster_msgs"]
 	path = src/robomaster_msgs
 	url = ../../ros2_packages/robomaster_msgs.git
+[submodule "src/Freyja"]
+	path = src/Freyja
+	url = https://github.com/unl-nimbus-lab/Freyja.git
