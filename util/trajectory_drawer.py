@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter.colorchooser import askcolor
 import pandas as pd
+import time
 
 
 class Paint(object):
@@ -29,7 +30,7 @@ class Paint(object):
         self.save_button = Button(self.root, text="Save", command=self.save)
         self.save_button.grid(row=0, column=5)
 
-        self.c = Canvas(self.root, bg="white", width=1500, height=1500)
+        self.c = Canvas(self.root, bg="white", width=2000, height=1500)
         self.c.grid(row=1, columnspan=6)
 
         self.positions = pd.DataFrame()
@@ -75,6 +76,11 @@ class Paint(object):
         self.positions["pos_y"] = (
             self.positions["pos_y"].max() - self.positions["pos_y"]
         )
+
+        # normalize time
+        self.positions["time"] -= self.positions["time"].min()
+        self.positions["time"] /= self.positions["time"].max()
+
         # scale to [0, 1]
         self.positions[["pos_x", "pos_y"]] /= self.positions[["pos_x", "pos_y"]].max()
 
@@ -99,6 +105,7 @@ class Paint(object):
 
         self.positions = self.positions.append(
             {
+                "time": time.time(),
                 "pos_x": event.x,
                 "pos_y": event.y,
                 "color_r": 255,
