@@ -1,0 +1,64 @@
+launch:
+- arg:
+    name:     "thisnamespace"
+    default:  "robomaster_0"
+- arg:
+    name:     "ctrl_type"
+    default:  "order-1-ff"
+
+- node:
+    pkg:  "state_manager"
+    exec: "state_manager_node"
+    output: "screen"
+    namespace:  "$(var thisnamespace)"
+    param:
+    -
+      name:   "state_source"
+      value:  "tf_mocap"
+    -
+      name:   "state_my_frame"
+      value:  "robomaster_0"
+    -
+      name:   "filter_type"
+      value:  "median"
+    -
+      name:   "filter_length"
+      value:  5      
+
+- node:
+    pkg:  "lqg_control"
+    exec: "lqg_control_node"
+    output: "screen"
+    namespace:  "$(var thisnamespace)"
+    param:
+    -
+      name:   "bias_compensation"
+      value:  "off"
+    -
+      name:   "controller_type"
+      value:  "$(var ctrl_type)"
+    -
+      name:   "chassis_length"
+      value:  0.10
+    -
+      name:   "chassis_width"
+      value:  0.10
+    -
+      name:   "wheel_radius"
+      value:  0.05
+
+- node:
+    pkg:  "robomaster_handler"
+    exec: "s1_interface"
+    output: "screen"
+    namespace:  "$(var thisnamespace)"
+    remap:
+    -
+      from:   "controller_command"    # subscriber topic
+      to:     "wheel_command"         # controller's published topic
+    -
+      from:   "emergency_stop"
+      to:     "emergency_stop_aj"
+    -
+      from:   "target_rpm"
+      to:     "cmd_wheels"
