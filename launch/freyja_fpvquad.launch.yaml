@@ -1,0 +1,38 @@
+launch:
+- arg:
+    name:     "thisnamespace"
+    default:  "fpvquad_0"
+
+- node:
+    pkg:      "state_manager"
+    exec:     "state_manager_node"
+    namespace: "$(var thisnamespace)"
+    param:
+    -
+      name:   "state_source"
+      value:  "tf_mocap"
+    -
+      name:   "tf_rate"
+      value:  190
+    -
+      name:   "state_my_frame"
+      value:  "fpvquad_0"
+
+- node:
+    pkg:      "lqg_control"
+    exec:     "lqg_flight_node"
+    namespace: "$(var thisnamespace)"
+    param:
+    -
+      name:   "bias_estimator"
+      value:  "off"
+    -
+      name:   "total_mass"
+      value:  0.85        #1.427
+    -
+      name:   "controller_rate"
+      value:  50
+    -
+      name:   "estimator_rate"
+      value:  55
+
