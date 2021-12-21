@@ -10,7 +10,7 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/Splines>
 
-#define CSV_NCOLS 6
+#define CSV_NCOLS 3
 
 using std::placeholders::_1;
 
@@ -20,7 +20,8 @@ typedef Eigen::Spline<double, 2> Spline2d;
 
 class ReferenceManager : public rclcpp::Node
 {
-  Eigen::MatrixXd pepd_;
+  Eigen::Matrix<double, Eigen::Dynamic, 2> pepd_;
+  Eigen::Matrix<double, Eigen::Dynamic, 2> vevd_;
   Eigen::VectorXd tvec_;
   Eigen::RowVector2d pepd_centre_;
   Eigen::RowVector2d pepd_scaler_;
@@ -38,6 +39,7 @@ class ReferenceManager : public rclcpp::Node
     void load_trajectory( const std::string& );
     void interpolate_trajectory();
     void scale_trajectory();
+    void refine_trajectory();
 
     rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr init_sub_;
     void initCallback( const std_msgs::msg::UInt8::ConstSharedPtr );
@@ -57,16 +59,17 @@ ReferenceManager::ReferenceManager() : Node( "reference_state_node" )
   get_parameter( "csv_file", fname );
 
   pepd_centre_ << 0.0, 1.2;
-  pepd_scaler_ << 1.3, 1.0;
+  pepd_scaler_ << 1.8, 1.5;
 
   fixed_pn_ = -0.5;
   fixed_yaw_ = 1.57;
 
-  TMAX_ = 25;
-  float trajectory_period = 1.0/10.0;
+  TMAX_ = 40.0;
+  float trajectory_period = 1.0/30.0;
 
   load_trajectory( fname );
   scale_trajectory();
+  refine_trajectory();
 
   go_recv_ = false;
   takeoff_recv_ = 0;
@@ -127,6 +130,7 @@ void ReferenceManager::load_trajectory( const std::string &fname )
   Eigen::MatrixXd pos_and_time = file_data.rightCols<3>();
   pepd_ = pos_and_time.leftCols<2>();
   tvec_ = pos_and_time.rightCols<1>();
+  vevd_ = pepd_;
   //tvec_.setLinSpaced( pepd_.rows(), 0, TMAX_ );
 }
 
@@ -147,6 +151,40 @@ void ReferenceManager::scale_trajectory()
 
   // adjust time to actual time
   tvec_ *= TMAX_;
+}
+
+void ReferenceManager::refine_trajectory()
+{
+  /* Construct velocity components from trajectory */
+  Eigen::RowVectorXd fcoeff(5);
+  fcoeff << 0.11, 0.15, 0.4, 0.22, 0.12 ;
+  //fcoeff << 0.2, 0.2, 0.2, 0.2, 0.2 ;
+  int nrows = pepd_.rows();
+  Eigen::VectorXd ve(nrows), vd(nrows);
+  Eigen::VectorXd dt(nrows);
+  dt << tvec_.tail(nrows-1) - tvec_.head(nrows-1), 1.0;
+  if( (dt.array() < 0).any() )
+    std::cout << "[ERROR]: tvec is not monotonically increasing." << std::endl;
+  dt = dt.cwiseMax( 0.01 );
+  std::cout << "Sample dt: " << dt.head<10>().transpose() << std::endl;
+  
+  ve << pepd_.col(0).tail(nrows-1) - pepd_.col(0).head(nrows-1), 0.0;   // numeric diff
+  ve = ve.cwiseQuotient( dt ).cwiseMin(2.0).cwiseMax(-2.0);             // divide and clip limits
+  ve[0] = fcoeff[0]*ve[0] + fcoeff[1]*ve[1];
+  for( int idx = 2; idx < nrows-2; idx++ )
+    ve[idx] = fcoeff * ve.segment<5>(idx-2);                            // smoothe
+
+  vd << pepd_.col(1).tail(nrows-1) - pepd_.col(1).head(nrows-1), 0.0;   // numeric diff
+  vd = vd.cwiseQuotient( dt ).cwiseMin(1.0).cwiseMax(-1.0);             // divide and clip limits
+  vd[0] = fcoeff[0]*vd[0] + fcoeff[1]*vd[1];
+  for( int idx = 2; idx < nrows-2; idx++ )
+    vd[idx] = fcoeff * vd.segment<5>(idx-2);                            // smoothe
+
+  vevd_.col(0) = ve;
+  vevd_.col(1) = vd;
+  std::cout << "Done refining velocities!" << std::endl;
+  std::cout << "Sample ve: " << ve.head<10>().transpose() << std::endl;
+  std::cout << "Sample vd: " << vd.head<10>().transpose() << std::endl;
 }
 
 void ReferenceManager::sendReference()
@@ -183,6 +221,8 @@ void ReferenceManager::sendReference()
       (tvec_.array() - t).abs().minCoeff(&idx);
       rs.pe = pepd_(idx, 0);
       rs.pd = -pepd_(idx, 1);
+      rs.ve = vevd_(idx, 0);
+      rs.vd = -vevd_(idx, 1);
     }
     else
     {
