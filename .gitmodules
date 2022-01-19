@@ -10,3 +10,6 @@
 [submodule "src/Freyja"]
 	path = src/Freyja
 	url = https://github.com/unl-nimbus-lab/Freyja.git
+[submodule "src/control_baselines/lib/RVO2"]
+	path = src/control_baselines/lib/RVO2
+	url = https://github.com/snape/RVO2
