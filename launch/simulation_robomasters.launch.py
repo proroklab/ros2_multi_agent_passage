@@ -16,7 +16,6 @@ def generate_launch_description():
                 parameters=[
                     {
                         "uuids": [f"robomaster_{i}" for i in range(1)],
-                        "unique_rigid_bodies": True,
                         "robomaster_0_initial_position": [-0.69, 2.1, 0.0],
                     }
                 ],

@@ -7,6 +7,11 @@ launch:
     default:  "order-1-ff"
 
 - node:
+    pkg:      "tf2_ros"
+    exec:     "static_transform_publisher"
+    args:     "0 0 0 1.57 0.00 3.14 map map_ned"
+
+- node:
     pkg:  "state_manager"
     exec: "state_manager_node"
     output: "screen"
@@ -23,11 +28,11 @@ launch:
       value:  "median"
     -
       name:   "filter_length"
-      value:  5      
+      value:  5
 
 - node:
     pkg:  "lqg_control"
-    exec: "lqg_control_node"
+    exec: "lqg_4wheel_node"
     output: "screen"
     namespace:  "$(var thisnamespace)"
     param:
