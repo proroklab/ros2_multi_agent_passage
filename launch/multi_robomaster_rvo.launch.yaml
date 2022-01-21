@@ -1,0 +1,19 @@
+launch:
+- group:
+    - push-ros-namespace:
+        namespace: "robomaster_0"
+    - include:
+        file: "launch/freyja_robomaster.launch.yaml"
+        arg:
+          -
+            name:   "uuid"
+            value:  "robomaster_0"
+- group:
+    - push-ros-namespace:
+        namespace: "robomaster_1"
+    - include:
+        file: "launch/freyja_robomaster.launch.yaml"
+        arg:
+          -
+            name:   "uuid"
+            value:  "robomaster_1"

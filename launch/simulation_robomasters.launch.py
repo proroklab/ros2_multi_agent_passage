@@ -6,6 +6,11 @@ from launch.event_handlers import OnProcessExit
 
 def generate_launch_description():
     # Crash on node failure
+    sim_params = {"uuids": []}
+    for i in range(2):
+        sim_params["uuids"].append(f"robomaster_{i}")
+        sim_params[f"robomaster_{i}_initial_position"] = [-0.69, 2.1 + i, 0.0]
+
     ld = LaunchDescription(
         [
             Node(
@@ -13,12 +18,7 @@ def generate_launch_description():
                 namespace="/sim",
                 executable="robomaster",
                 name="simulation",
-                parameters=[
-                    {
-                        "uuids": [f"robomaster_{i}" for i in range(1)],
-                        "robomaster_0_initial_position": [-0.69, 2.1, 0.0],
-                    }
-                ],
+                parameters=[sim_params],
             ),
             Node(
                 package="rviz2",

@@ -1,7 +1,6 @@
 launch:
 - arg:
-    name:     "thisnamespace"
-    default:  "robomaster_0"
+    name:     "uuid"
 - arg:
     name:     "ctrl_type"
     default:  "order-1-ff"
@@ -15,14 +14,13 @@ launch:
     pkg:  "state_manager"
     exec: "state_manager_node"
     output: "screen"
-    namespace:  "$(var thisnamespace)"
     param:
     -
       name:   "state_source"
       value:  "tf_mocap"
     -
       name:   "state_my_frame"
-      value:  "robomaster_0"
+      value:  "$(var uuid)"
     -
       name:   "filter_type"
       value:  "median"
@@ -34,7 +32,6 @@ launch:
     pkg:  "lqg_control"
     exec: "lqg_4wheel_node"
     output: "screen"
-    namespace:  "$(var thisnamespace)"
     param:
     -
       name:   "bias_compensation"
@@ -56,7 +53,6 @@ launch:
     pkg:  "robomaster_handler"
     exec: "s1_interface"
     output: "screen"
-    namespace:  "$(var thisnamespace)"
     remap:
     -
       from:   "controller_command"    # subscriber topic
