@@ -17,3 +17,12 @@ launch:
           -
             name:   "uuid"
             value:  "robomaster_1"
+- group:
+    - push-ros-namespace:
+        namespace: "robomaster_2"
+    - include:
+        file: "launch/freyja_robomaster.launch.yaml"
+        arg:
+          -
+            name:   "uuid"
+            value:  "robomaster_2"

@@ -5,6 +5,11 @@ from launch.event_handlers import OnProcessExit
 
 
 def generate_launch_description():
+    sim_params = {"uuids": []}
+    for i in range(2):
+        sim_params["uuids"].append(f"fpvquad_{i}")
+        sim_params[f"fpvquad_{i}_initial_position"] = [-0.69, 2.1 + i, 0.0]
+
     # Crash on node failure
     ld = LaunchDescription(
         [

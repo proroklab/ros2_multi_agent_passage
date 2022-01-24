@@ -7,9 +7,9 @@ from launch.event_handlers import OnProcessExit
 def generate_launch_description():
     # Crash on node failure
     sim_params = {"uuids": []}
-    for i in range(2):
+    for i, px in enumerate([-0.5, 0.05, 1.02]):
         sim_params["uuids"].append(f"robomaster_{i}")
-        sim_params[f"robomaster_{i}_initial_position"] = [-0.69, 2.1 + i, 0.0]
+        sim_params[f"robomaster_{i}_initial_position"] = [-2.0, px, 0.0]
 
     ld = LaunchDescription(
         [
