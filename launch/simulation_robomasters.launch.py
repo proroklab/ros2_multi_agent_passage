@@ -6,10 +6,18 @@ from launch.event_handlers import OnProcessExit
 
 def generate_launch_description():
     # Crash on node failure
-    sim_params = {"uuids": []}
-    for i, px in enumerate([-0.5, 0.05, 1.02]):
-        sim_params["uuids"].append(f"robomaster_{i}")
-        sim_params[f"robomaster_{i}_initial_position"] = [-2.0, px, 0.0]
+    # sim_params = {"uuids": []}
+    # for i, px in enumerate([-1.5]): #, 0.05, 1.02]):
+    #    sim_params["uuids"].append(f"robomaster_{i}")
+    #    sim_params[f"robomaster_{i}_initial_position"] = [-2.0, px, 0.0]
+
+    sim_params = {
+        "uuids": ["robomaster_0", "robomaster_1", "robomaster_2", "robomaster_3"],
+        "robomaster_0_initial_position": [-2.0, 2.0, 0.0],
+        "robomaster_1_initial_position": [-2.0, -2.0, 0.0],
+        "robomaster_2_initial_position": [-2.0, -1.0, 0.0],
+        "robomaster_3_initial_position": [-2.0, 1.0, 0.0],
+    }
 
     ld = LaunchDescription(
         [
