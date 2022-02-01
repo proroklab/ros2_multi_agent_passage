@@ -1,11 +1,14 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <map>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include "freyja_msgs/msg/reference_state.hpp"
 #include "freyja_msgs/msg/current_state.hpp"
+
+#include "visualization_msgs/msg/marker.hpp"
+#include "geometry_msgs/msg/point.hpp"
 
 #include <RVO.h>
 
@@ -58,11 +61,14 @@ public:
     void sendReference();
 
     void setupScenario();
+
+    visualization_msgs::msg::Marker toMarker(const std::vector<RVO::Vector2>& vertices, const std::string& ns);
 private:
 
     std::vector<std::unique_ptr<Agent>> agents_;
     std::vector<RVO::Vector2> goals;
     RVO::RVOSimulator sim;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
 };
 
 RVONavigator::RVONavigator()
@@ -72,17 +78,54 @@ RVONavigator::RVONavigator()
     ref_timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<float>(1.0 / 30.0),
                                       std::bind(&RVONavigator::sendReference, this));
 
+    marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 5);
+
     for (const auto& i :
          {
-             0, 1, 2
+             0, 1, 2, 3
          })
     {
         agents_.emplace_back(std::make_unique<Agent>(this, "robomaster_" + std::to_string(i)));
     }
+    goals.emplace_back(-2.0, 2.0);
+    goals.emplace_back(2.0, 2.0);
     goals.emplace_back(-1.0, 2.0);
-    goals.emplace_back(0.0, 2.0);
     goals.emplace_back(1.0, 2.0);
+    //goals.emplace_back(1.0, 2.0);
     setupScenario();
+}
+
+visualization_msgs::msg::Marker RVONavigator::toMarker(const std::vector<RVO::Vector2>& vertices, const std::string& ns)
+{
+    assert(!vertices.empty());
+
+    visualization_msgs::msg::Marker marker;
+
+    marker.header.frame_id = "map_ned";
+    marker.header.stamp = get_clock()->now();
+    marker.ns = ns;
+    marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    marker.pose.position.z = 0.0;
+    marker.pose.orientation.w = 1.;
+    marker.scale.x = 0.05;
+    marker.color.r = 1.0;
+    marker.color.g = 0;
+    marker.color.b = 0.0;
+    marker.color.a = 1.;
+
+    for (const auto v : vertices)
+    {
+        geometry_msgs::msg::Point p{};
+        p.x = v.x();
+        p.y = v.y();
+        marker.points.emplace_back(p);
+    }
+
+    marker.points.emplace_back(marker.points[0]);
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);
+
+    return marker;
 }
 
 void RVONavigator::setupScenario()
@@ -91,7 +134,14 @@ void RVONavigator::setupScenario()
     sim.setTimeStep(1.0 / 30.0);
 
     // Specify default parameters for agents that are subsequently added.
-    sim.setAgentDefaults(15.0f, 10, 5.0f, 2.0f, 0.3f, 2.0f);
+    sim.setAgentDefaults(
+        5.0f, // neighborDist
+        10, // maxNeighbors
+        2.0f, // timeHorizon
+        2.0f, // timeHorizonObst
+        0.2f, // radius
+        2.0f // maxSpeed
+    );
 
     // Add agents, specifying their start position.
     for (int i = 0; i < static_cast<int>(agents_.size()); i++)
@@ -99,16 +149,36 @@ void RVONavigator::setupScenario()
         sim.addAgent(RVO::Vector2(0.0f, static_cast<float>(i)));
     }
 
-    // Add (polygonal) obstacle(s), specifying vertices in counterclockwise order.
-    std::vector<RVO::Vector2> vertices;
-    vertices.push_back(RVO::Vector2(-10.0f, -3.0f));
-    vertices.push_back(RVO::Vector2(-0.5f, -0.2f));
-    vertices.push_back(RVO::Vector2(-0.5f, 0.2f));
-    vertices.push_back(RVO::Vector2(-10.0f, 3.0f));
+    std::vector <RVO::Vector2> vertices_border =
+    {
+        {3.0f, -3.0f},
+        {-3.0f, -3.0f},
+        {-3.0f, 3.0f},
+        {3.0f, 3.0f},
+    };
+    marker_pub_->publish(toMarker(vertices_border, "obstacle_border"));
+    sim.addObstacle(vertices_border);
 
-    sim.addObstacle(vertices);
+    std::vector <RVO::Vector2> vertices_obstacle_left =
+    {
+        {3.0f, 1.0f},
+        {0.5f, 0.2f},
+        {0.5f, -0.2f},
+        {3.0f, -1.0f},
+    };
+    marker_pub_->publish(toMarker(vertices_obstacle_left, "obstacle_left"));
+    sim.addObstacle(vertices_obstacle_left);
 
-    // Process obstacles so that they are accounted for in the simulation.
+    std::vector <RVO::Vector2> vertices_obstacle_right =
+    {
+        {-3.0f, -1.0f},
+        {-0.5f, -0.2f},
+        {-0.5f, 0.2f},
+        {-3.0f, 1.0f}
+    };
+    marker_pub_->publish(toMarker(vertices_obstacle_right, "obstacle_right"));
+    sim.addObstacle(vertices_obstacle_right);
+
     sim.processObstacles();
 }
 
