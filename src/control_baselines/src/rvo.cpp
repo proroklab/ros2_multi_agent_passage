@@ -20,10 +20,14 @@ using std::placeholders::_1;
 
 struct Agent
 {
+    enum State { initial, navigating, goal_reached };
+
     Agent(rclcpp::Node* node, const std::string& ns)
         : ns_{ns}
         , node_{node}
         , current_state_{}
+        , goal{0, 0}
+        , state{State::initial}
     {
         cs_sub_ = node->create_subscription<freyja_msgs::msg::CurrentState>(ns + "/current_state", 1, [this](const freyja_msgs::msg::CurrentState::ConstSharedPtr msg)
         {
@@ -39,6 +43,9 @@ struct Agent
 
     rclcpp::Publisher<freyja_msgs::msg::ReferenceState>::SharedPtr refstate_pub_;
     freyja_msgs::msg::CurrentState current_state_;
+
+    RVO::Vector2 goal;
+    State state;
 
     const auto getPosition() const
     {
@@ -66,31 +73,41 @@ public:
 private:
 
     std::vector<std::unique_ptr<Agent>> agents_;
-    std::vector<RVO::Vector2> goals;
     RVO::RVOSimulator sim;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
+    float delta_t_;
 };
 
 RVONavigator::RVONavigator()
     : Node("reference_state_node")
     , sim{}
 {
-    ref_timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<float>(1.0 / 30.0),
+    declare_parameter<float>("sim_delta_t", 1.f / 30.f);
+    declare_parameter<float>("neighbor_dist", 5.f);
+    declare_parameter<int>("max_neighbors", 10);
+    declare_parameter<float>("time_horizon", 2.f);
+    declare_parameter<float>("time_horizon_obst", 2.f);
+    declare_parameter<float>("robot_radius", 0.2f);
+    declare_parameter<float>("max_speed", 2.f);
+
+    declare_parameter<std::vector<std::string>>("uuids", {});
+
+    get_parameter("sim_delta_t", delta_t_);
+
+    ref_timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<float>(delta_t_),
                                       std::bind(&RVONavigator::sendReference, this));
 
     marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 5);
 
-    for (const auto& i :
-         {
-             0, 1, 2, 3
-         })
+    for (const auto& uuid : get_parameter("uuids").get_value<std::vector<std::string>>())
     {
-        agents_.emplace_back(std::make_unique<Agent>(this, "robomaster_" + std::to_string(i)));
+        agents_.emplace_back(std::make_unique<Agent>(this, uuid));
     }
-    goals.emplace_back(-2.0, 2.0);
+
+    /*goals.emplace_back(-2.0, 2.0);
     goals.emplace_back(2.0, 2.0);
     goals.emplace_back(-1.0, 2.0);
-    goals.emplace_back(1.0, 2.0);
+    goals.emplace_back(1.0, 2.0);*/
     //goals.emplace_back(1.0, 2.0);
     setupScenario();
 }
@@ -131,16 +148,16 @@ visualization_msgs::msg::Marker RVONavigator::toMarker(const std::vector<RVO::Ve
 void RVONavigator::setupScenario()
 {
     // Specify global time step of the simulation.
-    sim.setTimeStep(1.0 / 30.0);
+    sim.setTimeStep(delta_t_);
 
     // Specify default parameters for agents that are subsequently added.
     sim.setAgentDefaults(
-        5.0f, // neighborDist
-        10, // maxNeighbors
-        2.0f, // timeHorizon
-        2.0f, // timeHorizonObst
-        0.2f, // radius
-        2.0f // maxSpeed
+        get_parameter("neighbor_dist").get_value<float>(),
+        get_parameter("max_neighbors").get_value<int>(),
+        get_parameter("time_horizon").get_value<float>(),
+        get_parameter("time_horizon_obst").get_value<float>(),
+        get_parameter("robot_radius").get_value<float>(),
+        get_parameter("max_speed").get_value<float>()
     );
 
     // Add agents, specifying their start position.
@@ -189,16 +206,25 @@ void RVONavigator::sendReference()
         const auto p = agents_[i]->getPosition();
         sim.setAgentPosition(i, p);
 
-        const auto dp = goals[i] - p;
+        switch (agents_[i]->state)
+        {
+            case Agent::State::initial:
+            case Agent::State::goal_reached:
+                sim.setAgentPrefVelocity(i, RVO::Vector2(0.0f, 0.0f));
+                break;
 
-        if (abs(dp) < sim.getAgentRadius(i) )
-        {
-            sim.setAgentPrefVelocity(i, RVO::Vector2(0.0f, 0.0f));
-        }
-        else
-        {
-            const auto v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
-            sim.setAgentPrefVelocity(i, v_ref);
+            case Agent::State::navigating:
+                const auto dp = agents_[i]->goal - p;
+
+                const auto v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
+                sim.setAgentPrefVelocity(i, v_ref);
+
+                if (abs(dp) < sim.getAgentRadius(i) )
+                {
+                    agents_[i]->state = Agent::State::goal_reached;
+                }
+
+                break;
         }
     }
 
@@ -213,7 +239,7 @@ void RVONavigator::sendReference()
         auto v_des = sim.getAgentVelocity(i);
         const auto v_true = agents_[i]->getVelocity();
 
-        float maxAccel = 10.0;
+        float maxAccel = 100.0;
         float dv = abs(v_des - v_true);
         std::cout << i << ": " << dv << " " << (maxAccel * sim.getTimeStep()) << " dv: " << dv;
         std::cout << " v_des: " << v_des << " v_true: " << v_true;
