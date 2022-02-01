@@ -11,6 +11,8 @@
 
   <depend>rclcpp</depend>
   <depend>freyja_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
