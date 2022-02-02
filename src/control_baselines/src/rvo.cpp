@@ -21,7 +21,7 @@
 
 struct Agent
 {
-    enum State { initial, navigating, goal_reached };
+    enum State { initial, move_center, move_goal, goal_reached };
 
     using PoseControl = control_baselines_msgs::action::PoseControl;
     using GoalHandlePoseControl = rclcpp_action::ServerGoalHandle<PoseControl>;
@@ -29,14 +29,14 @@ struct Agent
     Agent(rclcpp::Node* node, const std::string& ns)
         : ns_{ns}
         , node_{node}
-        , current_state_{}
+        , current_state_{nullptr}
         , pose_action_server_goal_handle{nullptr}
         , goal{}
         , state{State::initial}
     {
         cs_sub_ = node->create_subscription<freyja_msgs::msg::CurrentState>(ns + "/current_state", 1, [this](const freyja_msgs::msg::CurrentState::ConstSharedPtr msg)
         {
-            current_state_ = *msg;
+            current_state_ = msg;
         });
 
         refstate_pub_ = node->create_publisher<freyja_msgs::msg::ReferenceState>(ns + "/reference_state", 1);
@@ -57,7 +57,7 @@ struct Agent
     rclcpp::Subscription<freyja_msgs::msg::CurrentState>::SharedPtr cs_sub_;
 
     rclcpp::Publisher<freyja_msgs::msg::ReferenceState>::SharedPtr refstate_pub_;
-    freyja_msgs::msg::CurrentState current_state_;
+    freyja_msgs::msg::CurrentState::ConstSharedPtr current_state_;
 
     rclcpp_action::Server<PoseControl>::SharedPtr pose_action_server_;
     std::shared_ptr<GoalHandlePoseControl> pose_action_server_goal_handle;
@@ -67,18 +67,32 @@ struct Agent
 
     const auto getPosition() const
     {
-        return RVO::Vector2{static_cast<float>(current_state_.state_vector[0]), static_cast<float>(current_state_.state_vector[1])};
+        return RVO::Vector2{static_cast<float>(current_state_->state_vector[0]), static_cast<float>(current_state_->state_vector[1])};
     }
 
     const auto getVelocity()const
     {
-        return RVO::Vector2{static_cast<float>(current_state_.state_vector[3]), static_cast<float>(current_state_.state_vector[4])};
+        return RVO::Vector2{static_cast<float>(current_state_->state_vector[3]), static_cast<float>(current_state_->state_vector[4])};
     }
 
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID&, std::shared_ptr<const PoseControl::Goal> action_goal)
     {
-        state = Agent::State::navigating;
+        if (current_state_ == nullptr)
+        {
+            return rclcpp_action::GoalResponse::REJECT;
+        }
+
         goal = RVO::Vector2(action_goal->goal_pose.position.x, action_goal->goal_pose.position.y);
+
+        if (((goal.y() < 0.f) && (getPosition().y() >= 0.f)) || ((goal.y() > 0.f) && (getPosition().y() <= 0.f)))
+        {
+            state = Agent::State::move_center;
+        }
+        else
+        {
+            state = Agent::State::move_goal;
+        }
+
         RCLCPP_INFO(node_->get_logger(), "Received goal request for %s", goal);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
@@ -92,7 +106,8 @@ struct Agent
                 RCLCPP_INFO(node_->get_logger(), "Cancel rejected: No goal is executed");
                 return rclcpp_action::CancelResponse::REJECT;
 
-            case Agent::State::navigating:
+            case Agent::State::move_center:
+            case Agent::State::move_goal:
                 state = Agent::State::initial;
                 RCLCPP_INFO(node_->get_logger(), "Cancel accepted");
                 return rclcpp_action::CancelResponse::ACCEPT;
@@ -127,6 +142,7 @@ private:
     RVO::RVOSimulator sim;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
     float delta_t_;
+    std::vector<visualization_msgs::msg::Marker> static_markers_;
 };
 
 RVONavigator::RVONavigator()
@@ -148,18 +164,13 @@ RVONavigator::RVONavigator()
     ref_timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<float>(delta_t_),
                                       std::bind(&RVONavigator::sendReference, this));
 
-    marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 5);
+    marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 1);
 
     for (const auto& uuid : get_parameter("uuids").get_value<std::vector<std::string>>())
     {
         agents_.emplace_back(std::make_unique<Agent>(this, uuid));
     }
 
-    /*goals.emplace_back(-2.0, 2.0);
-    goals.emplace_back(2.0, 2.0);
-    goals.emplace_back(-1.0, 2.0);
-    goals.emplace_back(1.0, 2.0);*/
-    //goals.emplace_back(1.0, 2.0);
     setupScenario();
 }
 
@@ -217,15 +228,15 @@ void RVONavigator::setupScenario()
         sim.addAgent(RVO::Vector2(0.0f, static_cast<float>(i)));
     }
 
-    std::vector <RVO::Vector2> vertices_border =
+    /*std::vector <RVO::Vector2> vertices_border =
     {
         {3.0f, -3.0f},
         {-3.0f, -3.0f},
         {-3.0f, 3.0f},
         {3.0f, 3.0f},
     };
-    marker_pub_->publish(toMarker(vertices_border, "obstacle_border"));
-    sim.addObstacle(vertices_border);
+    static_markers_.push_back(toMarker(vertices_border, "obstacle_border"));
+    sim.addObstacle(vertices_border);*/
 
     std::vector <RVO::Vector2> vertices_obstacle_left =
     {
@@ -234,7 +245,7 @@ void RVONavigator::setupScenario()
         {0.7f, -0.2f},
         {3.0f, -1.0f},
     };
-    marker_pub_->publish(toMarker(vertices_obstacle_left, "obstacle_left"));
+    static_markers_.push_back(toMarker(vertices_obstacle_left, "obstacle_left"));
     sim.addObstacle(vertices_obstacle_left);
 
     std::vector <RVO::Vector2> vertices_obstacle_right =
@@ -244,7 +255,7 @@ void RVONavigator::setupScenario()
         {-0.7f, 0.2f},
         {-3.0f, 1.0f}
     };
-    marker_pub_->publish(toMarker(vertices_obstacle_right, "obstacle_right"));
+    static_markers_.push_back(toMarker(vertices_obstacle_right, "obstacle_right"));
     sim.addObstacle(vertices_obstacle_right);
 
     sim.processObstacles();
@@ -252,50 +263,86 @@ void RVONavigator::setupScenario()
 
 void RVONavigator::sendReference()
 {
+    for (const auto& marker : static_markers_)
+    {
+        marker_pub_->publish(marker);
+    }
+
     for (size_t i = 0; i < sim.getNumAgents(); i++)
     {
+        if (agents_[i]->current_state_ == nullptr)
+        {
+            continue;
+        }
+
         const auto p = agents_[i]->getPosition();
         sim.setAgentPosition(i, p);
+        const auto v = agents_[i]->getVelocity();
+        sim.setAgentVelocity(i, v);
 
         auto result = std::make_shared<control_baselines_msgs::action::PoseControl::Result>();
         auto feedback = std::make_shared<control_baselines_msgs::action::PoseControl::Feedback>();
+
+        auto v_ref = RVO::Vector2(0.0f, 0.0f);
 
         switch (agents_[i]->state)
         {
             case Agent::State::initial:
             case Agent::State::goal_reached:
-                sim.setAgentPrefVelocity(i, RVO::Vector2(0.0f, 0.0f));
                 break;
 
-            case Agent::State::navigating:
-                const auto dp = agents_[i]->goal - p;
-                const auto v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
-                sim.setAgentPrefVelocity(i, v_ref);
-
-                if (abs(dp) < sim.getAgentRadius(i) )
+            case Agent::State::move_center:
                 {
-                    agents_[i]->state = Agent::State::goal_reached;
-                    agents_[i]->pose_action_server_goal_handle->succeed(result);
+                    const auto dp = RVO::Vector2(0.0f, 0.0f) - p;
+                    v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
+
+                    if (abs(dp) < sim.getAgentRadius(i))
+                    {
+                        agents_[i]->state = Agent::State::move_goal;
+                    }
+
+                    agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
+
+                    break;
                 }
 
-                agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
+            case Agent::State::move_goal:
+                {
+                    const auto dp = agents_[i]->goal - p;
+                    v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
 
-                break;
+                    if (abs(dp) < sim.getAgentRadius(i))
+                    {
+                        agents_[i]->state = Agent::State::goal_reached;
+                        agents_[i]->pose_action_server_goal_handle->succeed(result);
+                    }
+
+                    agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
+
+                    break;
+                }
         }
+
+        sim.setAgentPrefVelocity(i, v_ref);
     }
 
     sim.doStep();
 
     for (size_t i = 0; i < sim.getNumAgents(); i++)
     {
+        if (agents_[i]->current_state_ == nullptr)
+        {
+            continue;
+        }
+
         freyja_msgs::msg::ReferenceState rs{};
-        rs.pn = agents_[i]->current_state_.state_vector[0];
-        rs.pe = agents_[i]->current_state_.state_vector[1];
-        rs.pd = agents_[i]->current_state_.state_vector[2];
+        rs.pn = agents_[i]->current_state_->state_vector[0];
+        rs.pe = agents_[i]->current_state_->state_vector[1];
+        rs.pd = agents_[i]->current_state_->state_vector[2];
         auto v_des = sim.getAgentVelocity(i);
         const auto v_true = agents_[i]->getVelocity();
 
-        float maxAccel = 100.0;
+        float maxAccel = 5.0;
         float dv = abs(v_des - v_true);
         //std::cout << i << ": " << dv << " " << (maxAccel * sim.getTimeStep()) << " dv: " << dv;
         //std::cout << " v_des: " << v_des << " v_true: " << v_true;
@@ -312,7 +359,7 @@ void RVONavigator::sendReference()
         rs.ve = v_des.y();
         rs.vd = 0.0;
         agents_[i]->refstate_pub_->publish(rs);
-        //std::cout << agents_[i]->ns_ << " " << agents_[i]->current_state_.state_vector[0] << " " << agents_[i]->current_state_.state_vector[1] << "\n";
+        //std::cout << agents_[i]->ns_ << " " << agents_[i]->current_state_->state_vector[0] << " " << agents_[i]->current_state_->state_vector[1] << "\n";
         //std::cout << agents_[i]->ns_ << " " << v_true << "\n";
     }
 }
