@@ -1,0 +1,4 @@
+geometry_msgs/Pose goal_pose
+---
+geometry_msgs/Pose pose_error
+---
