@@ -7,6 +7,9 @@
 #include "freyja_msgs/msg/reference_state.hpp"
 #include "freyja_msgs/msg/current_state.hpp"
 
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "control_baselines_msgs/action/pose_control.hpp"
+
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/point.hpp"
 
@@ -16,17 +19,19 @@
 #include <eigen3/unsupported/Eigen/Splines>
 
 
-using std::placeholders::_1;
-
 struct Agent
 {
     enum State { initial, navigating, goal_reached };
+
+    using PoseControl = control_baselines_msgs::action::PoseControl;
+    using GoalHandlePoseControl = rclcpp_action::ServerGoalHandle<PoseControl>;
 
     Agent(rclcpp::Node* node, const std::string& ns)
         : ns_{ns}
         , node_{node}
         , current_state_{}
-        , goal{0, 0}
+        , pose_action_server_goal_handle{nullptr}
+        , goal{}
         , state{State::initial}
     {
         cs_sub_ = node->create_subscription<freyja_msgs::msg::CurrentState>(ns + "/current_state", 1, [this](const freyja_msgs::msg::CurrentState::ConstSharedPtr msg)
@@ -35,6 +40,16 @@ struct Agent
         });
 
         refstate_pub_ = node->create_publisher<freyja_msgs::msg::ReferenceState>(ns + "/reference_state", 1);
+
+        using namespace std::placeholders;
+
+        pose_action_server_ = rclcpp_action::create_server<PoseControl>(
+                                  node_,
+                                  ns + "/pose_control",
+                                  std::bind(&Agent::handle_goal, this, _1, _2),
+                                  std::bind(&Agent::handle_cancel, this, _1),
+                                  std::bind(&Agent::handle_accepted, this, _1));
+
     }
 
     const std::string ns_;
@@ -43,6 +58,9 @@ struct Agent
 
     rclcpp::Publisher<freyja_msgs::msg::ReferenceState>::SharedPtr refstate_pub_;
     freyja_msgs::msg::CurrentState current_state_;
+
+    rclcpp_action::Server<PoseControl>::SharedPtr pose_action_server_;
+    std::shared_ptr<GoalHandlePoseControl> pose_action_server_goal_handle;
 
     RVO::Vector2 goal;
     State state;
@@ -56,6 +74,39 @@ struct Agent
     {
         return RVO::Vector2{static_cast<float>(current_state_.state_vector[3]), static_cast<float>(current_state_.state_vector[4])};
     }
+
+    rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID&, std::shared_ptr<const PoseControl::Goal> action_goal)
+    {
+        state = Agent::State::navigating;
+        goal = RVO::Vector2(action_goal->goal_pose.position.x, action_goal->goal_pose.position.y);
+        RCLCPP_INFO(node_->get_logger(), "Received goal request for %s", goal);
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandlePoseControl>)
+    {
+        switch (state)
+        {
+            case Agent::State::initial:
+            case Agent::State::goal_reached:
+                RCLCPP_INFO(node_->get_logger(), "Cancel rejected: No goal is executed");
+                return rclcpp_action::CancelResponse::REJECT;
+
+            case Agent::State::navigating:
+                state = Agent::State::initial;
+                RCLCPP_INFO(node_->get_logger(), "Cancel accepted");
+                return rclcpp_action::CancelResponse::ACCEPT;
+        }
+
+        return rclcpp_action::CancelResponse::REJECT;
+    }
+
+    void handle_accepted(const std::shared_ptr<GoalHandlePoseControl> goal_handle)
+    {
+        RCLCPP_INFO(node_->get_logger(), "handle accepted");
+        pose_action_server_goal_handle = goal_handle;
+    }
+
 };
 
 class RVONavigator : public rclcpp::Node
@@ -179,8 +230,8 @@ void RVONavigator::setupScenario()
     std::vector <RVO::Vector2> vertices_obstacle_left =
     {
         {3.0f, 1.0f},
-        {0.5f, 0.2f},
-        {0.5f, -0.2f},
+        {0.7f, 0.2f},
+        {0.7f, -0.2f},
         {3.0f, -1.0f},
     };
     marker_pub_->publish(toMarker(vertices_obstacle_left, "obstacle_left"));
@@ -189,8 +240,8 @@ void RVONavigator::setupScenario()
     std::vector <RVO::Vector2> vertices_obstacle_right =
     {
         {-3.0f, -1.0f},
-        {-0.5f, -0.2f},
-        {-0.5f, 0.2f},
+        {-0.7f, -0.2f},
+        {-0.7f, 0.2f},
         {-3.0f, 1.0f}
     };
     marker_pub_->publish(toMarker(vertices_obstacle_right, "obstacle_right"));
@@ -206,6 +257,9 @@ void RVONavigator::sendReference()
         const auto p = agents_[i]->getPosition();
         sim.setAgentPosition(i, p);
 
+        auto result = std::make_shared<control_baselines_msgs::action::PoseControl::Result>();
+        auto feedback = std::make_shared<control_baselines_msgs::action::PoseControl::Feedback>();
+
         switch (agents_[i]->state)
         {
             case Agent::State::initial:
@@ -215,14 +269,16 @@ void RVONavigator::sendReference()
 
             case Agent::State::navigating:
                 const auto dp = agents_[i]->goal - p;
-
                 const auto v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
                 sim.setAgentPrefVelocity(i, v_ref);
 
                 if (abs(dp) < sim.getAgentRadius(i) )
                 {
                     agents_[i]->state = Agent::State::goal_reached;
+                    agents_[i]->pose_action_server_goal_handle->succeed(result);
                 }
+
+                agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
 
                 break;
         }
@@ -241,17 +297,17 @@ void RVONavigator::sendReference()
 
         float maxAccel = 100.0;
         float dv = abs(v_des - v_true);
-        std::cout << i << ": " << dv << " " << (maxAccel * sim.getTimeStep()) << " dv: " << dv;
-        std::cout << " v_des: " << v_des << " v_true: " << v_true;
+        //std::cout << i << ": " << dv << " " << (maxAccel * sim.getTimeStep()) << " dv: " << dv;
+        //std::cout << " v_des: " << v_des << " v_true: " << v_true;
 
         if (dv > maxAccel * sim.getTimeStep())
         {
             const auto v_des_constr = (1 - (maxAccel * sim.getTimeStep() / dv)) * v_true + (maxAccel * sim.getTimeStep() / dv) * v_des;
             v_des = v_des_constr;
-            std::cout << " constr: " << v_des_constr;
+            //std::cout << " constr: " << v_des_constr;
         }
 
-        std::cout <<  "\n";
+        //std::cout <<  "\n";
         rs.vn = v_des.x();
         rs.ve = v_des.y();
         rs.vd = 0.0;
