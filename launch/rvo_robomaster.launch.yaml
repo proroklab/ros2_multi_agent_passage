@@ -1,0 +1,25 @@
+launch:
+  - include:
+      file: "launch/simulation_robomasters.launch.py"
+
+  - include:
+      file: "launch/multi_robomaster_rvo.launch.yaml"
+
+  - node:
+      pkg:  "control_baselines"
+      exec: "rvo"
+      output: "screen"
+      param:
+        -
+          name:   "uuids"
+          value:
+            - "robomaster_0"
+            - "robomaster_1"
+            - "robomaster_2"
+            - "robomaster_3"
+        -
+          name:   "time_horizon_obst"
+          value:  1.0
+        -
+          name:   "robot_radius"
+          value:  0.4
