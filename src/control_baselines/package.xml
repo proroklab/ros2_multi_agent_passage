@@ -11,7 +11,7 @@
 
   <depend>rclcpp</depend>
   <depend>freyja_msgs</depend>
-  <depend>control_baselines_msgs</depend>
+  <depend>evaluation_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>rclcpp_action</depend>
   <depend>visualization_msgs</depend>

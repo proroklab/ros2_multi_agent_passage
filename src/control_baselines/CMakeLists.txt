@@ -23,7 +23,7 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(freyja_msgs REQUIRED)
-find_package(control_baselines_msgs REQUIRED)
+find_package(evaluation_msgs REQUIRED)
 find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
 add_subdirectory(lib/RVO2)
@@ -37,7 +37,7 @@ set_target_properties(librvo2 PROPERTIES
         )
 
 add_executable(rvo src/rvo.cpp)
-ament_target_dependencies(rvo rclcpp rclcpp_action std_msgs geometry_msgs freyja_msgs control_baselines_msgs visualization_msgs)
+ament_target_dependencies(rvo rclcpp rclcpp_action std_msgs geometry_msgs freyja_msgs evaluation_msgs visualization_msgs)
 
 target_link_libraries(rvo librvo2 Eigen3::Eigen)
 

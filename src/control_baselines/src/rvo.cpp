@@ -8,7 +8,7 @@
 #include "freyja_msgs/msg/current_state.hpp"
 
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "control_baselines_msgs/action/pose_control.hpp"
+#include "evaluation_msgs/action/pose_control.hpp"
 
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/point.hpp"
@@ -23,7 +23,7 @@ struct Agent
 {
     enum State { initial, move_center, move_goal, goal_reached };
 
-    using PoseControl = control_baselines_msgs::action::PoseControl;
+    using PoseControl = evaluation_msgs::action::PoseControl;
     using GoalHandlePoseControl = rclcpp_action::ServerGoalHandle<PoseControl>;
 
     Agent(rclcpp::Node* node, const std::string& ns)
@@ -280,8 +280,8 @@ void RVONavigator::sendReference()
         const auto v = agents_[i]->getVelocity();
         sim.setAgentVelocity(i, v);
 
-        auto result = std::make_shared<control_baselines_msgs::action::PoseControl::Result>();
-        auto feedback = std::make_shared<control_baselines_msgs::action::PoseControl::Feedback>();
+        auto result = std::make_shared<evaluation_msgs::action::PoseControl::Result>();
+        auto feedback = std::make_shared<evaluation_msgs::action::PoseControl::Feedback>();
 
         auto v_ref = RVO::Vector2(0.0f, 0.0f);
 
