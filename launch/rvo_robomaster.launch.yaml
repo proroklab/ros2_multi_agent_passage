@@ -6,7 +6,7 @@ launch:
       file: "launch/multi_robomaster_rvo.launch.yaml"
 
   - node:
-      pkg:  "control_baselines"
+      pkg:  "rvo"
       exec: "rvo"
       output: "screen"
       param:
