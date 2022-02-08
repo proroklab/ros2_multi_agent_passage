@@ -4,6 +4,7 @@ from evaluation_msgs.srv import InitialPoseStartGoal
 from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from evaluation_infrastructure.agent import Agent
+from evaluation_infrastructure.qos_profiles import initial_state_service_qos_profile
 
 
 class AgentStartGoal(Agent):
@@ -18,7 +19,11 @@ class AgentStartGoal(Agent):
     def __init__(self):
         super().__init__()
 
-        self.init_state_srv = self.create_client(InitialPoseStartGoal, "/initial_state")
+        self.init_state_srv = self.create_client(
+            InitialPoseStartGoal,
+            "/initial_state",
+            qos_profile=initial_state_service_qos_profile,
+        )
 
     def queried_next_episode(self, uuid: str) -> bool:
         if uuid not in self.reset_futures:

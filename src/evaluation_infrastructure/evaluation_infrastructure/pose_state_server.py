@@ -4,6 +4,7 @@ from evaluation_msgs.srv import InitialPoseStartGoal
 import rclpy
 from evaluation_infrastructure.mode_server import ModeService
 from geometry_msgs.msg import Pose
+from evaluation_infrastructure.qos_profiles import initial_state_service_qos_profile
 
 
 class InitialStateService(ModeService):
@@ -31,6 +32,7 @@ class InitialStateService(ModeService):
             InitialPoseStartGoal,
             "initial_state",
             self.get_initial_state,
+            qos_profile=initial_state_service_qos_profile,
         )
 
     @staticmethod
