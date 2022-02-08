@@ -1,0 +1,14 @@
+# Agents can be in these modes
+uint8 RUNNING=1
+uint8 NEED_RESET=2
+uint8 RESETTING=3
+uint8 FINISHED_RUNNING=4
+uint8 ABORT_RUNNING=5
+uint8 FINISHED_RESETTING=6
+uint8 EPISODES_FINISHED=7
+
+std_msgs/String uuid
+uint8 current_mode # Use above enums
+---
+# Global mode can only be RESETTING or RUNNING
+uint8 global_mode

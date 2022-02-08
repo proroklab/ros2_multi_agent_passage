@@ -21,6 +21,8 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
         "action/PoseControl.action"
+        "srv/InitialPoseStartGoal.srv"
+        "srv/ModeServer.srv"
         DEPENDENCIES geometry_msgs
         )
 

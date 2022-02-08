@@ -1,0 +1,6 @@
+std_msgs/String uuid
+---
+geometry_msgs/Pose start
+geometry_msgs/Pose goal
+int32   episode_id        # ID of the current episode
+int32   trial_id          # How many episodes we've done total, this may diverge
