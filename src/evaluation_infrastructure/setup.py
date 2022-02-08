@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "pose_state_server = evaluation_infrastructure.pose_state_server:main",
         ],
     },
 )
