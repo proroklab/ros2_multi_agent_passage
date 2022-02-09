@@ -137,6 +137,7 @@ public:
     void setupScenario();
 
     visualization_msgs::msg::Marker toMarker(const std::vector<RVO::Vector2>& vertices, const std::string& ns);
+    visualization_msgs::msg::Marker toOCRAMarker(int agent_i);
 private:
 
     std::vector<std::unique_ptr<Agent>> agents_;
@@ -166,7 +167,7 @@ RVONavigator::RVONavigator()
     ref_timer_ = rclcpp::create_timer(this, get_clock(), std::chrono::duration<float>(delta_t_),
                                       std::bind(&RVONavigator::sendReference, this));
 
-    marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 1);
+    marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("visualization_marker", 5);
 
     for (const auto& uuid : get_parameter("uuids").get_value<std::vector<std::string>>())
     {
@@ -209,6 +210,42 @@ visualization_msgs::msg::Marker RVONavigator::toMarker(const std::vector<RVO::Ve
     return marker;
 }
 
+visualization_msgs::msg::Marker RVONavigator::toOCRAMarker(int agent_i)
+{
+    visualization_msgs::msg::Marker marker;
+
+    marker.header.frame_id = "map_ned";
+    marker.header.stamp = get_clock()->now();
+    marker.ns = "ocra_lines_0";
+    marker.type = visualization_msgs::msg::Marker::LINE_LIST;
+    marker.scale.x = 0.01;
+    marker.color.r = 1.0;
+    marker.color.g = 0;
+    marker.color.b = 0.0;
+    marker.color.a = 1.;
+
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.lifetime = rclcpp::Duration::from_seconds(0);
+
+    for (size_t i = 0; i < sim.getAgentNumORCALines(agent_i); i++)
+    {
+        const auto line = sim.getAgentORCALine(agent_i, i);
+        const auto line_start = line.point + 5 * line.direction;
+        geometry_msgs::msg::Point p_start{};
+        p_start.x = line_start.x();
+        p_start.y = line_start.y();
+        marker.points.emplace_back(p_start);
+
+        const auto line_end = line.point - 5 * line.direction;
+        geometry_msgs::msg::Point p_end{};
+        p_end.x = line_end.x();
+        p_end.y = line_end.y();
+        marker.points.emplace_back(p_end);
+    }
+
+    return marker;
+}
+
 void RVONavigator::setupScenario()
 {
     // Specify global time step of the simulation.
@@ -230,7 +267,7 @@ void RVONavigator::setupScenario()
         sim.addAgent(RVO::Vector2(0.0f, static_cast<float>(i)));
     }
 
-    /*std::vector <RVO::Vector2> vertices_border =
+    std::vector <RVO::Vector2> vertices_border =
     {
         {3.0f, -3.0f},
         {-3.0f, -3.0f},
@@ -238,7 +275,7 @@ void RVONavigator::setupScenario()
         {3.0f, 3.0f},
     };
     static_markers_.push_back(toMarker(vertices_border, "obstacle_border"));
-    sim.addObstacle(vertices_border);*/
+    sim.addObstacle(vertices_border);
 
     std::vector <RVO::Vector2> vertices_obstacle_left =
     {
@@ -290,6 +327,8 @@ void RVONavigator::sendReference()
     {
         marker_pub_->publish(marker);
     }
+
+    marker_pub_->publish(toOCRAMarker(0));
 
     for (size_t i = 0; i < sim.getNumAgents(); i++)
     {
