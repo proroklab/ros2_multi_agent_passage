@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "pose_state_server = evaluation_infrastructure.pose_state_server:main",
+            "mode_server = evaluation_infrastructure.mode_service:main",
             "agent_centr_rm_rvo_passage = evaluation_infrastructure.agent_centralized_robomaster_rvo_passage:main",
         ],
     },
