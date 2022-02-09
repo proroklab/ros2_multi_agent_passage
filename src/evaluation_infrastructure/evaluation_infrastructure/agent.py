@@ -12,7 +12,7 @@ class Agent(Node):
     MODE = ModeServer.Request()
     global_mode: int = MODE.RESETTING
     agent_modes: Dict[str, int] = {}
-    prev_global_mode: int = MODE.RESETTING
+    prev_global_mode: int = -1
     prev_agent_modes: Dict[str, int] = {}
 
     mode_future: Dict[str, Future] = {}
@@ -51,18 +51,18 @@ class Agent(Node):
                     if self.queried_next_episode(agent):
                         self.agent_modes[agent] = self.MODE.RESETTING
 
-            dones = self.reset(controllable_agents, state_dict)
-
             running_agents = [
                 agent
                 for agent, mode in self.agent_modes.items()
                 if mode == self.MODE.RESETTING or mode == self.MODE.FINISHED_RESETTING
             ]
-            if not running_agents:
+            if not len(running_agents) == len(controllable_agents):
                 self.get_logger().info(
                     "Awaiting other agents to finish resetting...", once=True
                 )
                 return
+
+            dones = self.reset(controllable_agents, state_dict)
 
             for agent, done in dones.items():
                 # Allow jumping back to resetting mode
@@ -159,8 +159,8 @@ class Agent(Node):
                 continue
 
             if agent not in self.prev_agent_modes:
-                self.prev_agent_modes[agent] = self.agent_modes[agent]
-            elif self.agent_modes[agent] != self.prev_agent_modes[agent]:
+                self.prev_agent_modes[agent] = -1
+            if self.agent_modes[agent] != self.prev_agent_modes[agent]:
                 self.on_agent_mode_transition(
                     agent, self.prev_agent_modes[agent], self.agent_modes[agent]
                 )
