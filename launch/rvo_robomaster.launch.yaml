@@ -18,8 +18,23 @@ launch:
             - "robomaster_2"
             - "robomaster_3"
         -
+          name:   "neighbor_dist"
+          value:  5.0
+        -
+          name:   "max_neighbors"
+          value:  10
+        -
+          name:   "time_horizon"
+          value:  2.0
+        -
           name:   "time_horizon_obst"
-          value:  1.0
+          value:  2.0
         -
           name:   "robot_radius"
-          value:  0.4
+          value:  0.2
+        -
+          name:   "max_speed"
+          value:  0.5
+        -
+          name:   "sim_delta_t"
+          value:  0.025
