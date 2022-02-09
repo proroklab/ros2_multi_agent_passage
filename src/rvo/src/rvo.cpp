@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 #include "rclcpp/rclcpp.hpp"
 #include "freyja_msgs/msg/reference_state.hpp"
@@ -156,6 +157,7 @@ RVONavigator::RVONavigator()
     declare_parameter<float>("time_horizon_obst", 2.f);
     declare_parameter<float>("robot_radius", 0.2f);
     declare_parameter<float>("max_speed", 2.f);
+    declare_parameter<float>("max_accel", 4.f);
 
     declare_parameter<std::vector<std::string>>("uuids", {});
 
@@ -261,6 +263,27 @@ void RVONavigator::setupScenario()
     sim.processObstacles();
 }
 
+template <class T>
+T clamp(const T val, const T val_min, const T val_max)
+{
+    if (val > val_max)
+    {
+        return val_max;
+    }
+
+    if (val < val_min)
+    {
+        return val_min;
+    }
+
+    return val;
+}
+
+RVO::Vector2 clamp(const RVO::Vector2& val, const float val_min, const float val_max)
+{
+    return RVO::Vector2(clamp(val.x(), val_min, val_max), clamp(val.y(), val_min, val_max));
+}
+
 void RVONavigator::sendReference()
 {
     for (const auto& marker : static_markers_)
@@ -342,25 +365,21 @@ void RVONavigator::sendReference()
         auto v_des = sim.getAgentVelocity(i);
         const auto v_true = agents_[i]->getVelocity();
 
-        float maxAccel = 5.0;
+        const float g = 9.81; // m/s*s
+        const float maxAccel = get_parameter("max_accel").get_value<float>() * g;
+        const float maxVel = get_parameter("max_speed").get_value<float>();
         float dv = abs(v_des - v_true);
-        //std::cout << i << ": " << dv << " " << (maxAccel * sim.getTimeStep()) << " dv: " << dv;
-        //std::cout << " v_des: " << v_des << " v_true: " << v_true;
 
         if (dv > maxAccel * sim.getTimeStep())
         {
             const auto v_des_constr = (1 - (maxAccel * sim.getTimeStep() / dv)) * v_true + (maxAccel * sim.getTimeStep() / dv) * v_des;
             v_des = v_des_constr;
-            //std::cout << " constr: " << v_des_constr;
         }
 
-        //std::cout <<  "\n";
-        rs.vn = v_des.x();
-        rs.ve = v_des.y();
+        rs.vn = clamp(v_des.x(), -maxVel, maxVel);
+        rs.ve = clamp(v_des.y(), -maxVel, maxVel);
         rs.vd = 0.0;
         agents_[i]->refstate_pub_->publish(rs);
-        //std::cout << agents_[i]->ns_ << " " << agents_[i]->current_state_->state_vector[0] << " " << agents_[i]->current_state_->state_vector[1] << "\n";
-        //std::cout << agents_[i]->ns_ << " " << v_true << "\n";
     }
 }
 
