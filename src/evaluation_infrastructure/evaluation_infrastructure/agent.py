@@ -10,13 +10,13 @@ import time
 class Agent(Node):
     iters = 0
     MODE = ModeServer.Request()
-    global_mode: int = MODE.RESETTING
-    agent_modes: Dict[str, int] = {}
-    prev_global_mode: int = -1
-    prev_agent_modes: Dict[str, int] = {}
+    _global_mode: int = MODE.RESETTING
+    _agent_modes: Dict[str, int] = {}
+    _prev_global_mode: int = -1
+    _prev_agent_modes: Dict[str, int] = {}
 
-    mode_future: Dict[str, Future] = {}
-    mode_future_timestamp: Dict[str, float] = {}
+    _mode_future: Dict[str, Future] = {}
+    _mode_future_timestamp: Dict[str, float] = {}
 
     def __init__(self):
         super().__init__("agent")
@@ -25,7 +25,7 @@ class Agent(Node):
         cycle_frequency = self.get_parameter("cycle_frequency").value
 
         self.update_timer = self.create_timer(1.0 / cycle_frequency, self._run)
-        self.sync_mode_timer = self.create_timer(1.0, self._sync_agent_modes)
+        self.sync_mode_timer = self.create_timer(1.0, self._sync__agent_modes)
         self.mode_client = self.create_client(
             ModeServer, "/mode_server", qos_profile=mode_service_qos_profile
         )
@@ -33,27 +33,27 @@ class Agent(Node):
     def _run(self):
         controllable_agents = self.get_controllable_agents()
         state_dict = self.get_state()
-        self._initialize_agent_modes(controllable_agents)
+        self._initialize__agent_modes(controllable_agents)
 
-        if self.global_mode == self.MODE.RESETTING:
+        if self._global_mode == self.MODE.RESETTING:
             # Resetting agents should be NEET_RESET or RESETTING
             # Once agents have reset, they should be FINISHED_RESETTING
             for agent in controllable_agents:
-                if self.agent_modes[agent] in [
+                if self._agent_modes[agent] in [
                     self.MODE.FINISHED_RUNNING,
                     self.MODE.ABORT_RUNNING,
                     self.MODE.RUNNING,
                 ]:
-                    self.agent_modes[agent] = self.MODE.NEED_RESET
+                    self._agent_modes[agent] = self.MODE.NEED_RESET
 
             for agent in controllable_agents:
-                if self.agent_modes[agent] == self.MODE.NEED_RESET:
+                if self._agent_modes[agent] == self.MODE.NEED_RESET:
                     if self.queried_next_episode(agent):
-                        self.agent_modes[agent] = self.MODE.RESETTING
+                        self._agent_modes[agent] = self.MODE.RESETTING
 
             running_agents = [
                 agent
-                for agent, mode in self.agent_modes.items()
+                for agent, mode in self._agent_modes.items()
                 if mode == self.MODE.RESETTING or mode == self.MODE.FINISHED_RESETTING
             ]
             if not len(running_agents) == len(controllable_agents):
@@ -67,23 +67,23 @@ class Agent(Node):
             for agent, done in dones.items():
                 # Allow jumping back to resetting mode
                 if done:
-                    self.agent_modes[agent] = self.MODE.FINISHED_RESETTING
+                    self._agent_modes[agent] = self.MODE.FINISHED_RESETTING
                 else:
-                    self.agent_modes[agent] = self.MODE.RESETTING
+                    self._agent_modes[agent] = self.MODE.RESETTING
 
             self.iters = 0
 
-        elif self.global_mode == self.MODE.RUNNING:
+        elif self._global_mode == self.MODE.RUNNING:
             for agent in controllable_agents:
-                if self.agent_modes[agent] == self.MODE.FINISHED_RESETTING:
+                if self._agent_modes[agent] == self.MODE.FINISHED_RESETTING:
                     self.get_logger().info(f"{agent} is reset")
-                    self.agent_modes[agent] = self.MODE.RUNNING
+                    self._agent_modes[agent] = self.MODE.RUNNING
 
             dones = self.step(controllable_agents, state_dict)
 
             running_agents = [
                 agent
-                for agent, mode in self.agent_modes.items()
+                for agent, mode in self._agent_modes.items()
                 if mode == self.MODE.RUNNING or mode == self.MODE.FINISHED_RUNNING
             ]
             if not running_agents:
@@ -94,7 +94,7 @@ class Agent(Node):
 
             for agent, done in dones.items():
                 if done:
-                    self.agent_modes[agent] = self.MODE.FINISHED_RUNNING
+                    self._agent_modes[agent] = self.MODE.FINISHED_RUNNING
 
             self.iters += 1
 
@@ -121,59 +121,59 @@ class Agent(Node):
     def get_state(self) -> Dict[str, Dict]:
         return {}
 
-    def _initialize_agent_modes(self, controllable_agents: List[str]) -> None:
+    def _initialize__agent_modes(self, controllable_agents: List[str]) -> None:
         for agent in controllable_agents:
-            if agent not in self.agent_modes:
+            if agent not in self._agent_modes:
                 # Set the initial mode to abort running. In case the inference
                 # node crashes, we don't have to restart the state server, which
                 # will transition into global resetting.
-                self.agent_modes[agent] = self.MODE.ABORT_RUNNING
+                self._agent_modes[agent] = self.MODE.ABORT_RUNNING
 
-    def _sync_agent_modes(self) -> None:
+    def _sync__agent_modes(self) -> None:
         controllable_agents = self.get_controllable_agents()
-        self._initialize_agent_modes(controllable_agents)
+        self._initialize__agent_modes(controllable_agents)
 
         for agent in controllable_agents:
-            if agent in self.mode_future and (
-                self.mode_future[agent].done() or self.mode_future[agent].cancelled()
+            if agent in self._mode_future and (
+                self._mode_future[agent].done() or self._mode_future[agent].cancelled()
             ):
-                if self.mode_future[agent].result() is not None:
-                    self.global_mode = self.mode_future[agent].result().global_mode
-                self.mode_future.pop(agent, None)
-                self.mode_future_timestamp.pop(agent, None)
+                if self._mode_future[agent].result() is not None:
+                    self._global_mode = self._mode_future[agent].result()._global_mode
+                self._mode_future.pop(agent, None)
+                self._mode_future_timestamp.pop(agent, None)
 
         for agent in controllable_agents:
-            if agent in self.mode_future:
-                if (time.time() - self.mode_future_timestamp[agent]) > 5.0:
-                    self.mode_future[agent].cancel()
+            if agent in self._mode_future:
+                if (time.time() - self._mode_future_timestamp[agent]) > 5.0:
+                    self._mode_future[agent].cancel()
                     self.get_logger().debug(f"Cancelled mode future for {agent}")
                 continue
             req = ModeServer.Request()
             req.uuid = String(data=agent)
-            req.current_mode = self.agent_modes[agent]
-            self.mode_future[agent] = self.mode_client.call_async(req)
-            self.mode_future_timestamp[agent] = time.time()
+            req.current_mode = self._agent_modes[agent]
+            self._mode_future[agent] = self.mode_client.call_async(req)
+            self._mode_future_timestamp[agent] = time.time()
 
         for agent in controllable_agents:
-            if agent not in self.agent_modes:
+            if agent not in self._agent_modes:
                 continue
 
-            if agent not in self.prev_agent_modes:
-                self.prev_agent_modes[agent] = -1
-            if self.agent_modes[agent] != self.prev_agent_modes[agent]:
+            if agent not in self._prev_agent_modes:
+                self._prev_agent_modes[agent] = -1
+            if self._agent_modes[agent] != self._prev_agent_modes[agent]:
                 self.on_agent_mode_transition(
-                    agent, self.prev_agent_modes[agent], self.agent_modes[agent]
+                    agent, self._prev_agent_modes[agent], self._agent_modes[agent]
                 )
-                self.prev_agent_modes[agent] = self.agent_modes[agent]
+                self._prev_agent_modes[agent] = self._agent_modes[agent]
 
-        if self.global_mode != self.prev_global_mode:
-            self.on_global_mode_transition(self.prev_global_mode, self.global_mode)
-            self.prev_global_mode = self.global_mode
+        if self._global_mode != self._prev_global_mode:
+            self.on__global_mode_transition(self._prev_global_mode, self._global_mode)
+            self._prev_global_mode = self._global_mode
 
     def on_agent_mode_transition(self, controllable_agent: str, old_mode, new_mode):
         self.get_logger().debug(
             f"agent {controllable_agent} mode transition from {old_mode} to {new_mode}"
         )
 
-    def on_global_mode_transition(self, old_mode, new_mode):
+    def on__global_mode_transition(self, old_mode, new_mode):
         self.get_logger().debug(f"global mode transition from {old_mode} to {new_mode}")
