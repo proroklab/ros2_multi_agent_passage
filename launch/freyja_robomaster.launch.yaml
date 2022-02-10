@@ -3,7 +3,7 @@ launch:
     name:     "uuid"
 - arg:
     name:     "ctrl_type"
-    default:  "order-1-ff"
+    default:  "vel-only"
 
 - node:
     pkg:      "tf2_ros"
