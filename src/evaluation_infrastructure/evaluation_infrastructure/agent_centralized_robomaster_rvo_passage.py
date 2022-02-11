@@ -43,7 +43,10 @@ class AgentCentralizedRobomasterRVOPassage(AgentStartGoal):
                     self, PoseControl, f"/{agent}/pose_control"
                 )
 
-            if agent not in self._step_dones:
+            if (
+                self._action_clients_rvo_step[agent].server_is_ready()
+                and agent not in self._step_dones
+            ):
                 g = PoseControl.Goal()
                 g.goal_pose = self.goal_poses[agent]
                 future = self._action_clients_rvo_step[agent].send_goal_async(g)

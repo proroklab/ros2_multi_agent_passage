@@ -36,6 +36,10 @@ class AgentStartGoal(Agent):
         )
 
     def queried_next_episode(self, uuid: str) -> bool:
+        if not self.init_state_srv.service_is_ready():
+            self.get_logger().debug(f"Waiting for initial state service")
+            return False
+
         if uuid not in self._initial_state_futures:
             self.get_logger().info(f"Requesting initial state for {uuid}...")
             req = InitialPoseStartGoal.Request()
@@ -77,7 +81,10 @@ class AgentStartGoal(Agent):
                     self, PoseControl, f"/{agent}/pose_control"
                 )
 
-            if agent not in self._reset_dones:
+            if (
+                self._action_clients_rvo_reset[agent].server_is_ready()
+                and agent not in self._reset_dones
+            ):
                 g = PoseControl.Goal()
                 g.goal_pose = self.start_poses[agent]
                 future = self._action_clients_rvo_reset[agent].send_goal_async(g)

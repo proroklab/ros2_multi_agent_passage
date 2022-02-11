@@ -135,6 +135,10 @@ class Agent(Node):
         controllable_agents = self.get_controllable_agents()
         self._initialize__agent_modes(controllable_agents)
 
+        if not self.mode_client.service_is_ready():
+            self.get_logger().debug(f"Waiting for mode service")
+            return
+
         for agent in controllable_agents:
             if agent in self._mode_future and (
                 self._mode_future[agent].done() or self._mode_future[agent].cancelled()
