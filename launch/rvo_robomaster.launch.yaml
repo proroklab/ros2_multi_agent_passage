@@ -17,6 +17,7 @@ launch:
             - "robomaster_1"
             - "robomaster_2"
             - "robomaster_3"
+            - "robomaster_4"
         -
           name:   "neighbor_dist"
           value:  5.0
