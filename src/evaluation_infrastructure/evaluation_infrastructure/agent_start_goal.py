@@ -31,6 +31,10 @@ class AgentStartGoal(Agent):
             qos_profile=initial_state_service_qos_profile,
         )
 
+        self.add_global_mode_transition_callback(
+            self.global_mode_transition_clear_resets
+        )
+
     def queried_next_episode(self, uuid: str) -> bool:
         if uuid not in self._initial_state_futures:
             self.get_logger().info(f"Requesting initial state for {uuid}...")
@@ -60,7 +64,7 @@ class AgentStartGoal(Agent):
         future = goal_handle.get_result_async()
         future.add_done_callback(get_result_callback)
 
-    def on_global_mode_transition(self, old_mode, new_mode):
+    def global_mode_transition_clear_resets(self, old_mode, new_mode):
         if new_mode == self.MODE.RESETTING:
             self._reset_dones = {}
 

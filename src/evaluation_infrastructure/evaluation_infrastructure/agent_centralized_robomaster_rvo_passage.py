@@ -13,6 +13,9 @@ class AgentCentralizedRobomasterRVOPassage(AgentStartGoal):
 
     def __init__(self):
         super().__init__()
+        self.add_global_mode_transition_callback(
+            self.global_mode_transition_clear_dones
+        )
 
     def rvo_step_goal_response_callback(self, uuid, future):
         goal_handle = future.result()
@@ -27,9 +30,7 @@ class AgentCentralizedRobomasterRVOPassage(AgentStartGoal):
         future = goal_handle.get_result_async()
         future.add_done_callback(get_result_callback)
 
-    def on_global_mode_transition(self, old_mode, new_mode):
-        super().on_global_mode_transition(old_mode, new_mode)
-
+    def global_mode_transition_clear_dones(self, old_mode, new_mode):
         if new_mode == self.MODE.RESETTING:
             self._step_dones = {}
 

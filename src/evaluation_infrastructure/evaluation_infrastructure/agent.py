@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Type, Any
+from typing import Dict, List, Callable
 from rclpy.task import Future
 from rclpy.node import Node
 from evaluation_infrastructure.qos_profiles import mode_service_qos_profile
@@ -14,6 +14,8 @@ class Agent(Node):
     _agent_modes: Dict[str, int] = {}
     _prev_global_mode: int = -1
     _prev_agent_modes: Dict[str, int] = {}
+    _global_mode_callbacks: List[Callable] = []
+    _agent_mode_callbacks: List[Callable] = []
 
     _mode_future: Dict[str, Future] = {}
     _mode_future_timestamp: Dict[str, float] = {}
@@ -161,19 +163,19 @@ class Agent(Node):
             if agent not in self._prev_agent_modes:
                 self._prev_agent_modes[agent] = -1
             if self._agent_modes[agent] != self._prev_agent_modes[agent]:
-                self.on_agent_mode_transition(
-                    agent, self._prev_agent_modes[agent], self._agent_modes[agent]
-                )
+                for callback in self._agent_mode_callbacks:
+                    callback(
+                        agent, self._prev_agent_modes[agent], self._agent_modes[agent]
+                    )
                 self._prev_agent_modes[agent] = self._agent_modes[agent]
 
         if self._global_mode != self._prev_global_mode:
-            self.on__global_mode_transition(self._prev_global_mode, self._global_mode)
+            for callback in self._global_mode_callbacks:
+                callback(self._prev_global_mode, self._global_mode)
             self._prev_global_mode = self._global_mode
 
-    def on_agent_mode_transition(self, controllable_agent: str, old_mode, new_mode):
-        self.get_logger().debug(
-            f"agent {controllable_agent} mode transition from {old_mode} to {new_mode}"
-        )
+    def add_agent_mode_transition_callback(self, callback: Callable):
+        self._agent_mode_callbacks.append(callback)
 
-    def on__global_mode_transition(self, old_mode, new_mode):
-        self.get_logger().debug(f"global mode transition from {old_mode} to {new_mode}")
+    def add_global_mode_transition_callback(self, callback: Callable):
+        self._global_mode_callbacks.append(callback)
