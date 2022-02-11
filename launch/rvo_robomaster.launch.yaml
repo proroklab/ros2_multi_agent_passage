@@ -39,3 +39,9 @@ launch:
         -
           name:   "sim_delta_t"
           value:  0.025
+        -
+          name:   "goal_reached_dist"
+          value:  0.1
+        -
+          name:   "waypoint_reached_dist"
+          value:  0.3

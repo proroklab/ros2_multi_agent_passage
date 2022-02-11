@@ -159,6 +159,8 @@ RVONavigator::RVONavigator()
     declare_parameter<float>("robot_radius", 0.2f);
     declare_parameter<float>("max_speed", 2.f);
     declare_parameter<float>("max_accel", 4.f);
+    declare_parameter<float>("waypoint_reached_dist", 0.3f);
+    declare_parameter<float>("goal_reached_dist", 0.1f);
 
     declare_parameter<std::vector<std::string>>("uuids", {});
 
@@ -358,7 +360,7 @@ void RVONavigator::sendReference()
                     const auto dp = RVO::Vector2(0.0f, 0.0f) - p;
                     v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
 
-                    if (abs(dp) < sim.getAgentRadius(i))
+                    if (abs(dp) < get_parameter("waypoint_reached_dist").get_value<float>())
                     {
                         agents_[i]->state = Agent::State::move_goal;
                     }
@@ -373,7 +375,7 @@ void RVONavigator::sendReference()
                     const auto dp = agents_[i]->goal - p;
                     v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
 
-                    if (abs(dp) < sim.getAgentRadius(i))
+                    if (abs(dp) < get_parameter("goal_reached_dist").get_value<float>())
                     {
                         agents_[i]->state = Agent::State::goal_reached;
                         agents_[i]->pose_action_server_goal_handle->succeed(result);
