@@ -351,8 +351,16 @@ void RVONavigator::sendReference()
 
         switch (agents_[i]->state)
         {
-            case Agent::State::initial:
             case Agent::State::goal_reached:
+                {
+                    freyja_msgs::msg::ReferenceState rs{};
+                    agents_[i]->refstate_pub_->publish(rs); // Publish 0 velocity
+                    agents_[i]->pose_action_server_goal_handle = nullptr;
+                    agents_[i]->state = Agent::State::initial;
+                    break;
+                }
+
+            case Agent::State::initial:
                 break;
 
             case Agent::State::move_center:
@@ -399,28 +407,36 @@ void RVONavigator::sendReference()
             continue;
         }
 
-        freyja_msgs::msg::ReferenceState rs{};
-        rs.pn = agents_[i]->current_state_->state_vector[0];
-        rs.pe = agents_[i]->current_state_->state_vector[1];
-        rs.pd = agents_[i]->current_state_->state_vector[2];
-        auto v_des = sim.getAgentVelocity(i);
-        const auto v_true = agents_[i]->getVelocity();
-
-        const float g = 9.81; // m/s*s
-        const float maxAccel = get_parameter("max_accel").get_value<float>() * g;
-        const float maxVel = get_parameter("max_speed").get_value<float>();
-        float dv = abs(v_des - v_true);
-
-        if (dv > maxAccel * sim.getTimeStep())
+        switch (agents_[i]->state)
         {
-            const auto v_des_constr = (1 - (maxAccel * sim.getTimeStep() / dv)) * v_true + (maxAccel * sim.getTimeStep() / dv) * v_des;
-            v_des = v_des_constr;
-        }
+            case Agent::State::initial:
+            case Agent::State::goal_reached:
+                break;
 
-        rs.vn = clamp(v_des.x(), -maxVel, maxVel);
-        rs.ve = clamp(v_des.y(), -maxVel, maxVel);
-        rs.vd = 0.0;
-        agents_[i]->refstate_pub_->publish(rs);
+            case Agent::State::move_center:
+            case Agent::State::move_goal:
+                {
+                    freyja_msgs::msg::ReferenceState rs{};
+                    auto v_des = sim.getAgentVelocity(i);
+                    const auto v_true = agents_[i]->getVelocity();
+
+                    const float g = 9.81; // m/s*s
+                    const float maxAccel = get_parameter("max_accel").get_value<float>() * g;
+                    const float maxVel = get_parameter("max_speed").get_value<float>();
+                    float dv = abs(v_des - v_true);
+
+                    if (dv > maxAccel * sim.getTimeStep())
+                    {
+                        const auto v_des_constr = (1 - (maxAccel * sim.getTimeStep() / dv)) * v_true + (maxAccel * sim.getTimeStep() / dv) * v_des;
+                        v_des = v_des_constr;
+                    }
+
+                    rs.vn = clamp(v_des.x(), -maxVel, maxVel);
+                    rs.ve = clamp(v_des.y(), -maxVel, maxVel);
+                    rs.vd = 0.0;
+                    agents_[i]->refstate_pub_->publish(rs);
+                }
+        }
     }
 }
 
