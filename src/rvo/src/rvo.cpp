@@ -420,7 +420,8 @@ void RVONavigator::sendReference()
             case Agent::State::goal_reached:
                 {
                     const auto dp = agents_[i]->goal - p;
-                    v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
+                    const auto v_max = sim.getAgentMaxSpeed(i);
+                    v_ref = clamp(2 * dp, -v_max, v_max);
 
                     if (abs(dp) < get_parameter("goal_reached_dist").get_value<float>())
                     {
