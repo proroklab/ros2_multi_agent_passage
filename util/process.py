@@ -6,7 +6,7 @@ from pathlib import Path
 
 def process_video(video_in_path, video_out_path):
     cap_in = cv2.VideoCapture(video_in_path)
-    cap_in.set(cv2.CAP_PROP_POS_FRAMES, 240)
+    cap_in.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     video_out = cv2.VideoWriter(
         video_out_path,
@@ -32,26 +32,24 @@ def process_video(video_in_path, video_out_path):
 
             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if last_frame is not None:
-                #diff = np.abs(frame_gray.astype(np.int) - last_frame)
-                #diff[diff < 20] = 0
-                #if aggr is None:
+                # diff = np.abs(frame_gray.astype(np.int) - last_frame)
+                # diff[diff < 20] = 0
+                # if aggr is None:
                 #    aggr = diff.astype(np.uint8)
-                #else:
+                # else:
                 #    aggr = np.clip(aggr + diff, 0, 255).astype(np.uint8)
 
                 # threshold for bright spots
                 fr_br = (frame_gray > 240).astype(float)
-
-                blur = cv2.GaussianBlur(frame_gray, (5, 5), 0)
-                ret3, th3 = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-                cv2.imshow("Frame", th3)
-
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
                 # closing: remove "negative" noise (close pixels under threshold)
                 closing = cv2.morphologyEx(fr_br, cv2.MORPH_CLOSE, kernel)
+                # cv2.imshow("closing", closing)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
                 # opening: remove "positive" noise (true noise that is not actually the LED)
                 opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel)
+                # cv2.imshow("opening", opening)
+
                 # dilation: open up to include area around the LED
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
                 dilation = cv2.dilate(opening, kernel, iterations=4)
@@ -73,8 +71,8 @@ def process_video(video_in_path, video_out_path):
                     * np.repeat(1.0 - (overlay[..., 3, np.newaxis] / 255), 3, axis=2)
                 ).astype(np.uint8)
                 frame_ov += overlay[..., :3]
-                frame_final = frame_ov #cv2.flip(frame_ov, 1)
-                # cv2.imshow("Frame", frame_final)
+                frame_final = frame_ov  # cv2.flip(frame_ov, 1)
+                cv2.imshow("Frame", frame_final)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
