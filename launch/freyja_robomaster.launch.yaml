@@ -6,11 +6,6 @@ launch:
     default:  "vel-only"
 
 - node:
-    pkg:      "tf2_ros"
-    exec:     "static_transform_publisher"
-    args:     "0 0 0 1.57 0.00 3.14 map map_ned"
-
-- node:
     pkg:  "state_manager"
     exec: "state_manager_node"
     output: "screen"
@@ -57,9 +52,6 @@ launch:
     -
       from:   "controller_command"    # subscriber topic
       to:     "wheel_command"         # controller's published topic
-    -
-      from:   "emergency_stop"
-      to:     "emergency_stop_aj"
     -
       from:   "target_rpm"
       to:     "cmd_wheels"

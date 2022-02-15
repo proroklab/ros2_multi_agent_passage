@@ -36,6 +36,11 @@ def generate_launch_description():
                 name="rviz",
                 arguments=["-d", "src/simple_simulator/rviz/sim.rviz"],
             ),
+            Node(
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                arguments=["0", "0", "0", "1.57", "0.0", "3.14", "map", "map_ned"],
+            ),
         ]
     )
     shutdown = Shutdown(reason="Node failure, stopping launch...")

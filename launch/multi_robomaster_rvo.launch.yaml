@@ -1,13 +1,13 @@
 launch:
-- group:
-    - push-ros-namespace:
-        namespace: "robomaster_0"
-    - include:
-        file: "launch/freyja_robomaster.launch.yaml"
-        arg:
-          -
-            name:   "uuid"
-            value:  "robomaster_0"
+#- group:
+#    - push-ros-namespace:
+#        namespace: "robomaster_0"
+#    - include:
+#        file: "launch/freyja_robomaster.launch.yaml"
+#        arg:
+#          -
+#            name:   "uuid"
+#            value:  "robomaster_0"
 - group:
     - push-ros-namespace:
         namespace: "robomaster_1"
@@ -17,31 +17,31 @@ launch:
           -
             name:   "uuid"
             value:  "robomaster_1"
-- group:
-    - push-ros-namespace:
-        namespace: "robomaster_2"
-    - include:
-        file: "launch/freyja_robomaster.launch.yaml"
-        arg:
-          -
-            name:   "uuid"
-            value:  "robomaster_2"
-- group:
-    - push-ros-namespace:
-        namespace: "robomaster_3"
-    - include:
-        file: "launch/freyja_robomaster.launch.yaml"
-        arg:
-          -
-            name:   "uuid"
-            value:  "robomaster_3"
-
-- group:
-    - push-ros-namespace:
-        namespace: "robomaster_4"
-    - include:
-        file: "launch/freyja_robomaster.launch.yaml"
-        arg:
-          -
-            name:   "uuid"
-            value:  "robomaster_4"
+#- group:
+#    - push-ros-namespace:
+#        namespace: "robomaster_2"
+#    - include:
+#        file: "launch/freyja_robomaster.launch.yaml"
+#        arg:
+#          -
+#            name:   "uuid"
+#            value:  "robomaster_2"
+#- group:
+#    - push-ros-namespace:
+#        namespace: "robomaster_3"
+#    - include:
+#        file: "launch/freyja_robomaster.launch.yaml"
+#        arg:
+#          -
+#            name:   "uuid"
+#            value:  "robomaster_3"
+#
+#- group:
+#    - push-ros-namespace:
+#        namespace: "robomaster_4"
+#    - include:
+#        file: "launch/freyja_robomaster.launch.yaml"
+#        arg:
+#          -
+#            name:   "uuid"
+#            value:  "robomaster_4"
