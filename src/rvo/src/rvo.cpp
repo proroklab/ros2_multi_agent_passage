@@ -208,6 +208,7 @@ RVONavigator::RVONavigator()
     declare_parameter<float>("max_accel", 4.f);
     declare_parameter<float>("waypoint_reached_dist", 0.3f);
     declare_parameter<float>("goal_reached_dist", 0.1f);
+    declare_parameter<float>("robot_desired_yaw", 1.57f);
 
     declare_parameter<std::vector<std::string>>("uuids", {});
 
@@ -401,6 +402,7 @@ void RVONavigator::sendReference()
             case Agent::State::goal_reached:
                 {
                     freyja_msgs::msg::ReferenceState rs{};
+                    rs.yaw = get_parameter("robot_desired_yaw").get_value<float>();
                     agents_[i]->refstate_pub_->publish(rs); // Publish 0 velocity
                     agents_[i]->pose_action_server_goal_handle = nullptr;
                     agents_[i]->state = Agent::State::initial;
@@ -488,6 +490,7 @@ void RVONavigator::sendReference()
                     rs.vn = clamp(v_des.x(), -maxVel, maxVel);
                     rs.ve = clamp(v_des.y(), -maxVel, maxVel);
                     rs.vd = 0.0;
+                    rs.yaw = get_parameter("robot_desired_yaw").get_value<float>();
                     agents_[i]->refstate_pub_->publish(rs);
                 }
         }
