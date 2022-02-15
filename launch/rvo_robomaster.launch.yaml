@@ -1,9 +1,7 @@
 launch:
   - include:
-      file: "launch/simulation_robomasters.launch.py"
+      file: "launch/multi_robomaster_rvo.launch.py"
 
-  - include:
-      file: "launch/multi_robomaster_rvo.launch.yaml"
 
   - node:
       pkg:  "rvo"
