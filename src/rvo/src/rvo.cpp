@@ -3,6 +3,9 @@
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <chrono>
+#include <deque>
+#include <random>
 
 #include "rclcpp/rclcpp.hpp"
 #include "freyja_msgs/msg/reference_state.hpp"
@@ -34,15 +37,17 @@ struct Agent
         , pose_action_server_goal_handle{nullptr}
         , goal{}
         , state{State::initial}
+        , prev_velocities{}
     {
+        using namespace std::chrono_literals;
+        using namespace std::placeholders;
+
         cs_sub_ = node->create_subscription<freyja_msgs::msg::CurrentState>(ns + "/current_state", 1, [this](const freyja_msgs::msg::CurrentState::ConstSharedPtr msg)
         {
             current_state_ = msg;
         });
 
         refstate_pub_ = node->create_publisher<freyja_msgs::msg::ReferenceState>(ns + "/reference_state", 1);
-
-        using namespace std::placeholders;
 
         pose_action_server_ = rclcpp_action::create_server<PoseControl>(
                                   node_,
@@ -51,6 +56,7 @@ struct Agent
                                   std::bind(&Agent::handle_cancel, this, _1),
                                   std::bind(&Agent::handle_accepted, this, _1));
 
+        timer_avg_vel_ = rclcpp::create_timer(node_, node_->get_clock(), 500ms, std::bind(&Agent::updateAvgVelocity, this));
     }
 
     const std::string ns_;
@@ -66,15 +72,47 @@ struct Agent
     RVO::Vector2 goal;
     State state;
 
+    // Keep track of previous velocities to detect if agent is stuck
+    std::deque<RVO::Vector2> prev_velocities;
+    rclcpp::TimerBase::SharedPtr timer_avg_vel_;
+    RVO::Vector2 avg_velocity;
+
     const auto getPosition() const
     {
+        assert(current_state_ != nullptr);
         return RVO::Vector2{static_cast<float>(current_state_->state_vector[0]), static_cast<float>(current_state_->state_vector[1])};
     }
 
     const auto getVelocity()const
     {
+        assert(current_state_ != nullptr);
         return RVO::Vector2{static_cast<float>(current_state_->state_vector[3]), static_cast<float>(current_state_->state_vector[4])};
     }
+
+    void updateAvgVelocity()
+    {
+        if (current_state_ == nullptr)
+        {
+            return;
+        }
+
+        prev_velocities.push_back(getVelocity());
+
+        if (prev_velocities.size() > 5)
+        {
+            prev_velocities.pop_front();
+
+            avg_velocity = RVO::Vector2{};
+
+            for (const auto& vel : prev_velocities)
+            {
+                avg_velocity += vel;
+            }
+
+            avg_velocity /= prev_velocities.size();
+        }
+    }
+
 
     rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID&, std::shared_ptr<const PoseControl::Goal> action_goal)
     {
@@ -134,6 +172,8 @@ public:
 
     void sendReference();
 
+    void detectProgress();
+
     void setupScenario();
 
     visualization_msgs::msg::Marker toMarker(const std::vector<RVO::Vector2>& vertices, const std::string& ns);
@@ -145,11 +185,18 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
     float delta_t_;
     std::vector<visualization_msgs::msg::Marker> static_markers_;
+
+    std::random_device rand_dev_;
+    std::mt19937 rand_gen_;
+    std::normal_distribution<> rand_dst_;
 };
 
 RVONavigator::RVONavigator()
     : Node("reference_state_node")
     , sim{}
+    , rand_dev_{}
+    , rand_gen_{rand_dev_()}
+    , rand_dst_{0.f, 0.25f}
 {
     declare_parameter<float>("sim_delta_t", 1.f / 30.f);
     declare_parameter<float>("neighbor_dist", 5.f);
@@ -429,6 +476,13 @@ void RVONavigator::sendReference()
                     {
                         const auto v_des_constr = (1 - (maxAccel * sim.getTimeStep() / dv)) * v_true + (maxAccel * sim.getTimeStep() / dv) * v_des;
                         v_des = v_des_constr;
+                    }
+
+                    if (abs(agents_[i]->avg_velocity) < 0.01f)
+                    {
+                        auto v_rand = RVO::Vector2(rand_dst_(rand_gen_), rand_dst_(rand_gen_));
+                        std::cout << i << " STUCK " << agents_[i]->avg_velocity << " vr " << v_rand << std::endl;
+                        v_des += v_rand;
                     }
 
                     rs.vn = clamp(v_des.x(), -maxVel, maxVel);
