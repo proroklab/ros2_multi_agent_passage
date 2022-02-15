@@ -141,12 +141,12 @@ struct Agent
         switch (state)
         {
             case Agent::State::initial:
-            case Agent::State::goal_reached:
                 RCLCPP_INFO(node_->get_logger(), "Cancel rejected: No goal is executed");
                 return rclcpp_action::CancelResponse::REJECT;
 
             case Agent::State::move_center:
             case Agent::State::move_goal:
+            case Agent::State::goal_reached:
                 state = Agent::State::initial;
                 RCLCPP_INFO(node_->get_logger(), "Cancel accepted");
                 return rclcpp_action::CancelResponse::ACCEPT;
@@ -392,23 +392,12 @@ void RVONavigator::sendReference()
         const auto v = agents_[i]->getVelocity();
         sim.setAgentVelocity(i, v);
 
-        auto result = std::make_shared<evaluation_msgs::action::PoseControl::Result>();
         auto feedback = std::make_shared<evaluation_msgs::action::PoseControl::Feedback>();
 
         auto v_ref = RVO::Vector2(0.0f, 0.0f);
 
         switch (agents_[i]->state)
         {
-            case Agent::State::goal_reached:
-                {
-                    freyja_msgs::msg::ReferenceState rs{};
-                    rs.yaw = get_parameter("robot_desired_yaw").get_value<float>();
-                    agents_[i]->refstate_pub_->publish(rs); // Publish 0 velocity
-                    agents_[i]->pose_action_server_goal_handle = nullptr;
-                    agents_[i]->state = Agent::State::initial;
-                    break;
-                }
-
             case Agent::State::initial:
                 break;
 
@@ -428,6 +417,7 @@ void RVONavigator::sendReference()
                 }
 
             case Agent::State::move_goal:
+            case Agent::State::goal_reached:
                 {
                     const auto dp = agents_[i]->goal - p;
                     v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
@@ -435,7 +425,10 @@ void RVONavigator::sendReference()
                     if (abs(dp) < get_parameter("goal_reached_dist").get_value<float>())
                     {
                         agents_[i]->state = Agent::State::goal_reached;
-                        agents_[i]->pose_action_server_goal_handle->succeed(result);
+                    }
+                    else
+                    {
+                        agents_[i]->state = Agent::State::move_goal;
                     }
 
                     agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
@@ -445,6 +438,26 @@ void RVONavigator::sendReference()
         }
 
         sim.setAgentPrefVelocity(i, v_ref);
+    }
+
+    const auto agent_reached_goal = [](const auto & a)
+    {
+        return a->state == Agent::State::initial || a->state == Agent::State::goal_reached;
+    };
+
+    if (std::all_of(agents_.begin(), agents_.end(), agent_reached_goal))
+    {
+        for (size_t i = 0; i < sim.getNumAgents(); i++)
+        {
+            auto result = std::make_shared<evaluation_msgs::action::PoseControl::Result>();
+            agents_[i]->pose_action_server_goal_handle->succeed(result);
+            agents_[i]->pose_action_server_goal_handle = nullptr;
+            agents_[i]->state = Agent::State::initial;
+
+            freyja_msgs::msg::ReferenceState rs{};
+            rs.yaw = get_parameter("robot_desired_yaw").get_value<float>();
+            agents_[i]->refstate_pub_->publish(rs);
+        }
     }
 
     sim.doStep();
@@ -459,11 +472,11 @@ void RVONavigator::sendReference()
         switch (agents_[i]->state)
         {
             case Agent::State::initial:
-            case Agent::State::goal_reached:
                 break;
 
             case Agent::State::move_center:
             case Agent::State::move_goal:
+            case Agent::State::goal_reached:
                 {
                     freyja_msgs::msg::ReferenceState rs{};
                     auto v_des = sim.getAgentVelocity(i);
