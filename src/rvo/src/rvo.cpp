@@ -319,30 +319,30 @@ void RVONavigator::setupScenario()
 
     std::vector <RVO::Vector2> vertices_border =
     {
-        {3.0f, -3.0f},
-        {-3.0f, -3.0f},
-        {-3.0f, 3.0f},
-        {3.0f, 3.0f},
+        {3.0f, -4.0f},
+        {-3.0f, -4.0f},
+        {-3.0f, 4.0f},
+        {3.0f, 4.0f},
     };
     static_markers_.push_back(toMarker(vertices_border, "obstacle_border"));
     sim.addObstacle(vertices_border);
 
     std::vector <RVO::Vector2> vertices_obstacle_left =
     {
-        {3.0f, 0.5f},
+        {3.0f, 1.0f},
         {0.25f, 0.1f},
         {0.25f, -0.1f},
-        {3.0f, -0.5f},
+        {3.0f, -1.0f},
     };
     static_markers_.push_back(toMarker(vertices_obstacle_left, "obstacle_left"));
     sim.addObstacle(vertices_obstacle_left);
 
     std::vector <RVO::Vector2> vertices_obstacle_right =
     {
-        {-3.0f, -0.5f},
+        {-3.0f, -1.0f},
         {-0.25f, -0.1f},
         {-0.25f, 0.1f},
-        {-3.0f, 0.5f}
+        {-3.0f, 1.0f}
     };
     static_markers_.push_back(toMarker(vertices_obstacle_right, "obstacle_right"));
     sim.addObstacle(vertices_obstacle_right);
