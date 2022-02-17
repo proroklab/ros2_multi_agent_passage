@@ -18,7 +18,7 @@ launch:
       value:  "$(var uuid)"
     -
       name:   "filter_type"
-      value:  "median"
+      value:  "gauss"
     -
       name:   "filter_length"
       value:  5
