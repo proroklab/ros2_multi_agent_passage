@@ -12,7 +12,7 @@ class Agent(Node):
     MODE = ModeServer.Request()
     _global_mode: int = MODE.RESETTING
     _agent_modes: Dict[str, int] = {}
-    _prev_global_mode: int = -1
+    _prev_global_mode: int = MODE.RESETTING
     _prev_agent_modes: Dict[str, int] = {}
     _global_mode_callbacks: List[Callable] = []
     _agent_mode_callbacks: List[Callable] = []
@@ -27,7 +27,7 @@ class Agent(Node):
         cycle_frequency = self.get_parameter("cycle_frequency").value
 
         self.update_timer = self.create_timer(1.0 / cycle_frequency, self._run)
-        self.sync_mode_timer = self.create_timer(1.0, self._sync__agent_modes)
+        self.sync_mode_timer = self.create_timer(1.0, self._sync_agent_modes)
         self.mode_client = self.create_client(
             ModeServer, "/mode_server", qos_profile=mode_service_qos_profile
         )
@@ -35,7 +35,7 @@ class Agent(Node):
     def _run(self):
         controllable_agents = self.get_controllable_agents()
         state_dict = self.get_state()
-        self._initialize__agent_modes(controllable_agents)
+        self._initialize_agent_modes(controllable_agents)
 
         if self._global_mode == self.MODE.RESETTING:
             # Resetting agents should be NEET_RESET or RESETTING
@@ -123,7 +123,7 @@ class Agent(Node):
     def get_state(self) -> Dict[str, Dict]:
         return {}
 
-    def _initialize__agent_modes(self, controllable_agents: List[str]) -> None:
+    def _initialize_agent_modes(self, controllable_agents: List[str]) -> None:
         for agent in controllable_agents:
             if agent not in self._agent_modes:
                 # Set the initial mode to abort running. In case the inference
@@ -131,9 +131,9 @@ class Agent(Node):
                 # will transition into global resetting.
                 self._agent_modes[agent] = self.MODE.ABORT_RUNNING
 
-    def _sync__agent_modes(self) -> None:
+    def _sync_agent_modes(self) -> None:
         controllable_agents = self.get_controllable_agents()
-        self._initialize__agent_modes(controllable_agents)
+        self._initialize_agent_modes(controllable_agents)
 
         if not self.mode_client.service_is_ready():
             self.get_logger().debug(f"Waiting for mode service")
