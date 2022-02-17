@@ -19,10 +19,7 @@ class AgentCentralizedRobomasterRVOPassage(AgentStartGoal):
 
     def rvo_step_goal_response_callback(self, uuid, future):
         goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.get_logger().info("Rejected navigation request")
-            self._step_dones[uuid] = True
-            return
+        assert goal_handle.accepted
 
         def get_result_callback(_):
             self._step_dones[uuid] = True
