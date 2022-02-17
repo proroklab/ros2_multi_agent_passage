@@ -14,5 +14,5 @@
 	path = src/rvo/lib/RVO2
 	url = https://github.com/snape/RVO2
 [submodule "src/passage_gnn_simple/lib/comms_relay"]
-	path = src/passage_gnn_simple/lib/comms_relay
+	path = src/passage_gnn_simple_cpp/lib/comms_relay
 	url = git@gitlab.developers.cam.ac.uk:cst/prorok-lab/comms_relay.git
