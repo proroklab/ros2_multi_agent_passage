@@ -48,24 +48,47 @@ class AgentGNNPassage(AgentStartGoal):
                     1,
                 )
 
+    def compute_dones(self, obs, controllable_agents):
+        dones = {}
+        for i, agent in enumerate(controllable_agents):
+            dist_goal = np.linalg.norm(obs["pos"][0][i] - obs["goal"][0][i])
+            dones[agent] = dist_goal < self.get_parameter("goal_reached_dist").value
+        return dones
+
     def sample_action_from_logit(self, logit):
+        assert logit.ndim == 1
         max_v = self.get_parameter("max_v").value
 
-        mean, log_std = torch.chunk(logit, 2, dim=1)
-        dist = torch.distributions.normal.Normal(mean, torch.exp(log_std))
-        action = dist.sample()
-        return torch.clamp(action, -max_v, max_v)
+        mean, log_std = torch.chunk(logit, 2)
+        action_dist = torch.distributions.normal.Normal(mean, torch.exp(log_std))
+        return action_dist.sample().clamp(-max_v, max_v)
 
     def action_constrain_vel_acc(self, action, velocity):
+        assert action.shape == velocity.shape
         max_v = self.get_parameter("max_v").value
         max_a = self.get_parameter("max_a").value
 
         f = 4.0
-        clipped_v = np.clip(action, -max_v, max_v)
+        clipped_v = action.clamp(-max_v, max_v)
         desired_a = (clipped_v - velocity) / (1 / f)
-        possible_a = np.clip(desired_a, -max_a, max_a)
+        possible_a = desired_a.clamp(-max_a, max_a)
         possible_v = velocity + possible_a * (1 / f)
-        return np.clip(possible_v, -max_v, max_v)
+        return possible_v.clamp(-max_v, max_v)
+
+    def compute_ref_state(self, logit, vel):
+        assert logit.ndim == 1 and vel.ndim == 1
+
+        action = self.sample_action_from_logit(logit)
+        proc_action = self.action_constrain_vel_acc(action, vel)
+        action_rot = self._current_side.apply(
+            torch.hstack((proc_action, torch.zeros(1)))
+        )
+
+        ref_state = ReferenceState()
+        ref_state.vn = float(action_rot[0])
+        ref_state.ve = float(action_rot[1])
+        ref_state.yaw = np.pi / 2
+        return ref_state
 
     def update_current_side(self):
         if list(self.start_poses.values())[0].position.y > 0.0:
@@ -107,4 +130,9 @@ class AgentGNNPassage(AgentStartGoal):
                 )[:2]
             )
 
-        return obs
+        return {k: torch.Tensor(v) for k, v in obs.items()}
+
+    def build_features_from_obs(self, obs):
+        return torch.cat(
+            [obs["goal"] - obs["pos"], obs["pos"], obs["pos"] + obs["vel"]], dim=2
+        )

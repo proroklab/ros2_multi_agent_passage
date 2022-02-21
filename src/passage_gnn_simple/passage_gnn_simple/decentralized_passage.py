@@ -2,9 +2,7 @@ import rclpy
 from typing import Dict, List
 from evaluation_infrastructure.agent_util import get_uuids_fast
 from .passage import AgentGNNPassage
-from freyja_msgs.msg import ReferenceState
 import torch
-import numpy as np
 from passage_gnn_simple_msgs.msg import CommMessage
 from rclpy.qos import QoSProfile
 from functools import partial
@@ -60,44 +58,27 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
         if len(self._current_states) != len(controllable_agents):
             return {agent: False for agent in controllable_agents}
 
-        obs_raw = self.build_obs(controllable_agents)
-        # extract agent dim
-        obs = {k: torch.Tensor(v[0]) for k, v in obs_raw.items()}
-        features = torch.cat(
-            [obs["goal"] - obs["pos"], obs["pos"], obs["pos"] + obs["vel"]], dim=1
-        )
+        obs = self.build_obs(controllable_agents)
+        features = self.build_features_from_obs(obs)[0, 0]
 
         with torch.no_grad():
             msg_i = self.model.nns.encoder(features)
 
             own_msg = CommMessage()
-            own_msg.data = msg_i[0].cpu().numpy().tolist()
+            own_msg.data = msg_i.cpu().tolist()
             own_msg.stamp = self.get_clock().now().to_msg()
             self.msg_publisher.publish(own_msg)
 
-            aggr = self.model.nns.gnn(torch.zeros(1, 32))
+            aggr = self.model.nns.gnn(torch.zeros(32))
             for neighbor_msg in self.msg_buffer.values():
-                msg_j = torch.Tensor(neighbor_msg.data).unsqueeze(0)
+                msg_j = torch.Tensor(neighbor_msg.data)
                 aggr += self.model.nns.gnn(msg_j - msg_i)
-            logits = self.model.nns.post(aggr)
-            action = self.sample_action_from_logit(logits)
-            proc_action = self.action_constrain_vel_acc(action, obs["vel"])[0]
-            action_rot = self._current_side.apply(np.hstack([proc_action, [0]]))[
-                :2
-            ].astype(float)
+            logit = self.model.nns.post(aggr)
 
-            ref_state = ReferenceState()
-            ref_state.vn = action_rot[0]
-            ref_state.ve = action_rot[1]
-            ref_state.yaw = np.pi / 2
-
+            ref_state = self.compute_ref_state(logit, obs["vel"][0, 0])
             self._vel_pubs[self.uuid].publish(ref_state)
 
-        dones = {}
-        for i, agent in enumerate(controllable_agents):
-            dist_goal = np.linalg.norm(obs["pos"][0][i] - obs["goal"][0][i])
-            dones[agent] = dist_goal < self.get_parameter("goal_reached_dist").value
-        return dones
+        return self.compute_dones(obs, controllable_agents)
 
     def get_controllable_agents(self) -> List[str]:
         return [self.uuid]
