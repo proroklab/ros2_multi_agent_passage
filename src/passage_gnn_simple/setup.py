@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "centralized_passage = passage_gnn_simple.centralized_passage:main",
+            "decentralized_passage = passage_gnn_simple.decentralized_passage:main",
         ],
     },
 )
