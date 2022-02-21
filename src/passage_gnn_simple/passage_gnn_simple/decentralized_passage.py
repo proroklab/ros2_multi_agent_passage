@@ -6,6 +6,7 @@ import torch
 from passage_gnn_simple_msgs.msg import CommMessage
 from rclpy.qos import QoSProfile
 from functools import partial
+from datetime import datetime
 
 msg_qos_profile = QoSProfile(
     history=rclpy.qos.QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
@@ -48,6 +49,14 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
                 qos_profile=msg_qos_profile,
             )
 
+    @staticmethod
+    def ros_timestamp_to_datetime(timestamp):
+        return datetime.fromtimestamp(timestamp.sec + timestamp.nanosec / 1e9)
+
+    @staticmethod
+    def ros_point_to_tensor(point):
+        return torch.tensor([point.x, point.y, point.z])
+
     def step(
         self, controllable_agents: List[str], state_dict: Dict[str, Dict]
     ) -> Dict[str, bool]:
@@ -67,16 +76,33 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
             own_msg = CommMessage()
             own_msg.data = msg_i.cpu().tolist()
             own_msg.stamp = self.get_clock().now().to_msg()
+            own_msg.pos.x = float(obs["pos"][0, 0, 0])
+            own_msg.pos.y = float(obs["pos"][0, 0, 1])
             self.msg_publisher.publish(own_msg)
+
+            own_time = self.ros_timestamp_to_datetime(own_msg.stamp)
+            own_pos = self.ros_point_to_tensor(own_msg.pos)
 
             aggr = self.model.nns.gnn(torch.zeros(32))
             for neighbor_msg in self.msg_buffer.values():
+                msg_pos = self.ros_point_to_tensor(neighbor_msg.pos)
+                msg_dist = torch.linalg.norm(own_pos - msg_pos)
+                if msg_dist > self.get_parameter("comm_range").value:
+                    continue
+
+                msg_time = self.ros_timestamp_to_datetime(neighbor_msg.stamp)
+                msg_age = (own_time - msg_time).microseconds
+                if msg_age > ((1 / self.get_parameter("cycle_frequency").value) * 1e9):
+                    self.get_logger().warn(f"Message age exceeds cycle frequency")
+
                 msg_j = torch.Tensor(neighbor_msg.data)
                 aggr += self.model.nns.gnn(msg_j - msg_i)
             logit = self.model.nns.post(aggr)
 
-            ref_state = self.compute_ref_state(logit, obs["vel"][0, 0])
-            self._vel_pubs[self.uuid].publish(ref_state)
+        ref_state = self.compute_ref_state(logit, obs["vel"][0, 0])
+        self._vel_pubs[self.uuid].publish(ref_state)
+
+        self.msg_buffer = {}
 
         return self.compute_dones(obs, controllable_agents)
 
