@@ -1,0 +1,31 @@
+launch:
+  - include:
+      file: "launch/rvo_robomaster.launch.yaml"
+
+  - node:
+      pkg:  "evaluation_infrastructure"
+      exec: "pose_state_server"
+#      output: "screen"
+      param:
+        - name:   "episodes_path"
+          value:  "src/passage_gnn_simple/config/passage_8e2d2_5_agents.yaml"
+        - name: "n_agents"
+          value: 5
+        - name: "n_episodes"
+          value: 10
+        - name: "n_trials"
+          value: 3
+
+  - node:
+      pkg:  "passage_gnn_simple"
+      exec: "centralized_passage"
+      output: "screen"
+      param:
+        - name:   "model_path"
+          value:  "src/passage_gnn_simple/models/9fa6b_4900.pt"
+        - name: "max_v"
+          value: 1.5
+        - name: "max_a"
+          value: 1.0
+        - name: "cycle_frequency"
+          value: 20

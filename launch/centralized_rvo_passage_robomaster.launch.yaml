@@ -1,0 +1,25 @@
+launch:
+  - include:
+      file: "launch/rvo_robomaster.launch.yaml"
+
+  - node:
+      pkg:  "evaluation_infrastructure"
+      exec: "pose_state_server"
+#      output: "screen"
+      param:
+        - name:   "episodes_path"
+          value:  "src/passage_gnn_simple/config/passage_8e2d2_5_agents.yaml"
+        - name: "n_agents"
+          value: 5
+        - name: "n_episodes"
+          value: 10
+        - name: "n_trials"
+          value: 3
+
+  - node:
+      pkg:  "evaluation_infrastructure"
+      exec: "agent_centr_rm_rvo_passage"
+      output: "screen"
+      param:
+        - name:   "cycle_frequency"
+          value:  30
