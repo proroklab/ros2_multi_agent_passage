@@ -197,7 +197,7 @@ private:
 };
 
 RVONavigator::RVONavigator()
-    : Node("reference_state_node")
+    : Node("rvo")
     , sim{}
     , rand_dev_{}
     , rand_gen_{rand_dev_()}
@@ -511,7 +511,6 @@ void RVONavigator::sendReference()
                     if (abs(agents_[i]->avg_velocity) < 0.01f && dist_goal > 1.0f)
                     {
                         auto v_rand = RVO::Vector2(rand_dst_(rand_gen_), rand_dst_(rand_gen_));
-                        std::cout << i << " STUCK " << agents_[i]->avg_velocity << " vr " << v_rand << std::endl;
                         v_des += v_rand;
                     }
 
