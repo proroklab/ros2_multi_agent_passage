@@ -25,7 +25,7 @@
 
 struct Agent
 {
-    enum State { initial, move_center, move_goal, goal_reached };
+    enum State { initial, move_waypoints, move_goal, reached_goal };
 
     using PoseControl = evaluation_msgs::action::PoseControl;
     using GoalHandlePoseControl = rclcpp_action::ServerGoalHandle<PoseControl>;
@@ -35,7 +35,7 @@ struct Agent
         , node_{node}
         , current_state_{nullptr}
         , pose_action_server_goal_handle{nullptr}
-        , goal{}
+        , waypoints{}
         , state{State::initial}
         , prev_velocities{}
     {
@@ -69,7 +69,7 @@ struct Agent
     rclcpp_action::Server<PoseControl>::SharedPtr pose_action_server_;
     std::shared_ptr<GoalHandlePoseControl> pose_action_server_goal_handle;
 
-    RVO::Vector2 goal;
+    std::deque<RVO::Vector2> waypoints;
     State state;
 
     // Keep track of previous velocities to detect if agent is stuck
@@ -121,16 +121,21 @@ struct Agent
             return rclcpp_action::GoalResponse::REJECT;
         }
 
-        goal = RVO::Vector2(action_goal->goal_pose.position.x, action_goal->goal_pose.position.y);
+        const auto goal = RVO::Vector2(action_goal->goal_pose.position.x, action_goal->goal_pose.position.y);
 
-        if (((goal.y() < 0.f) && (getPosition().y() >= 0.f)) || ((goal.y() > 0.f) && (getPosition().y() <= 0.f)))
+        if ((goal.y() < 0.f) && (getPosition().y() >= 0.f))
         {
-            state = Agent::State::move_center;
+            waypoints.emplace_back(0.0, 0.3);
+            waypoints.emplace_back(0.0, -0.3);
         }
-        else
+        else if ((goal.y() > 0.f) && (getPosition().y() <= 0.f))
         {
-            state = Agent::State::move_goal;
+            waypoints.emplace_back(0.0, -0.3);
+            waypoints.emplace_back(0.0, 0.3);
         }
+
+        state = Agent::State::move_waypoints;
+        waypoints.push_back(goal);
 
         RCLCPP_INFO(node_->get_logger(), "Received goal request for %s", goal);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -144,9 +149,9 @@ struct Agent
                 RCLCPP_INFO(node_->get_logger(), "Cancel rejected: No goal is executed");
                 return rclcpp_action::CancelResponse::REJECT;
 
-            case Agent::State::move_center:
+            case Agent::State::move_waypoints:
             case Agent::State::move_goal:
-            case Agent::State::goal_reached:
+            case Agent::State::reached_goal:
                 state = Agent::State::initial;
                 RCLCPP_INFO(node_->get_logger(), "Cancel accepted");
                 return rclcpp_action::CancelResponse::ACCEPT;
@@ -401,14 +406,21 @@ void RVONavigator::sendReference()
             case Agent::State::initial:
                 break;
 
-            case Agent::State::move_center:
+            case Agent::State::move_waypoints:
                 {
-                    const auto dp = RVO::Vector2(0.0f, 0.0f) - p;
+                    const auto dp = agents_[i]->waypoints[0] - p;
                     v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
 
                     if (abs(dp) < get_parameter("waypoint_reached_dist").get_value<float>())
                     {
-                        agents_[i]->state = Agent::State::move_goal;
+                        if (agents_[i]->waypoints.size() == 1)
+                        {
+                            agents_[i]->state = Agent::State::move_goal;
+                        }
+                        else
+                        {
+                            agents_[i]->waypoints.pop_front();
+                        }
                     }
 
                     agents_[i]->pose_action_server_goal_handle->publish_feedback(feedback);
@@ -417,15 +429,15 @@ void RVONavigator::sendReference()
                 }
 
             case Agent::State::move_goal:
-            case Agent::State::goal_reached:
+            case Agent::State::reached_goal:
                 {
-                    const auto dp = agents_[i]->goal - p;
+                    const auto dp = agents_[i]->waypoints[0] - p;
                     const auto v_max = sim.getAgentMaxSpeed(i);
                     v_ref = clamp(2 * dp, -v_max, v_max);
 
                     if (abs(dp) < get_parameter("goal_reached_dist").get_value<float>())
                     {
-                        agents_[i]->state = Agent::State::goal_reached;
+                        agents_[i]->state = Agent::State::reached_goal;
                     }
                     else
                     {
@@ -443,7 +455,7 @@ void RVONavigator::sendReference()
 
     const auto agent_reached_goal = [](const auto & a)
     {
-        return a->state == Agent::State::initial || a->state == Agent::State::goal_reached;
+        return a->state == Agent::State::reached_goal;
     };
 
     if (std::all_of(agents_.begin(), agents_.end(), agent_reached_goal))
@@ -475,9 +487,9 @@ void RVONavigator::sendReference()
             case Agent::State::initial:
                 break;
 
-            case Agent::State::move_center:
+            case Agent::State::move_waypoints:
             case Agent::State::move_goal:
-            case Agent::State::goal_reached:
+            case Agent::State::reached_goal:
                 {
                     freyja_msgs::msg::ReferenceState rs{};
                     auto v_des = sim.getAgentVelocity(i);
@@ -494,7 +506,9 @@ void RVONavigator::sendReference()
                         v_des = v_des_constr;
                     }
 
-                    if (abs(agents_[i]->avg_velocity) < 0.01f)
+                    const auto dist_goal = abs(agents_[i]->waypoints[0] - agents_[i]->getPosition());
+
+                    if (abs(agents_[i]->avg_velocity) < 0.01f && dist_goal > 1.0f)
                     {
                         auto v_rand = RVO::Vector2(rand_dst_(rand_gen_), rand_dst_(rand_gen_));
                         std::cout << i << " STUCK " << agents_[i]->avg_velocity << " vr " << v_rand << std::endl;
