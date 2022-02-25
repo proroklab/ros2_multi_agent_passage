@@ -104,15 +104,15 @@ struct Agent
         {
             return rclcpp_action::GoalResponse::REJECT;
         }
+        waypoints.clear();
 
         const auto goal = RVO::Vector2(action_goal->goal_pose.position.x, action_goal->goal_pose.position.y);
-
-        if ((goal.y() < 0.f) && (getPosition().y() >= 0.f))
+        if ((goal.y() < 0.f) && (getPosition().y() > 0.f))
         {
             waypoints.emplace_back(0.0, 0.3);
             waypoints.emplace_back(0.0, -0.3);
         }
-        else if ((goal.y() > 0.f) && (getPosition().y() <= 0.f))
+        else if ((goal.y() >= 0.f) && (getPosition().y() <= 0.f))
         {
             waypoints.emplace_back(0.0, -0.3);
             waypoints.emplace_back(0.0, 0.3);
