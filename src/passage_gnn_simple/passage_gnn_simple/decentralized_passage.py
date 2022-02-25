@@ -21,33 +21,10 @@ msg_qos_profile = QoSProfile(
 
 
 class AgentDecentralizedGNNPassage(AgentGNNPassage):
-    msg_subscribers = {}
-    msg_buffer = {}
-    msg_publisher = None
-
     def __init__(self):
         super().__init__()
         self.declare_parameter("uuid")
         self.uuid = self.get_parameter("uuid").value
-
-        self.msg_publisher = self.create_publisher(
-            CommMessage, "comm_msg", qos_profile=msg_qos_profile
-        )
-
-    def msg_receive(self, uuid, msg):
-        self.msg_buffer[uuid] = msg
-
-    def update_msg_subscribers(self):
-        for uuid in get_uuids_fast(self):
-            if uuid == self.uuid or uuid in self.msg_subscribers:
-                continue
-
-            self.msg_subscribers[uuid] = self.create_subscription(
-                CommMessage,
-                f"/{uuid}/comm_msg",
-                partial(self.msg_receive, uuid),
-                qos_profile=msg_qos_profile,
-            )
 
     @staticmethod
     def ros_timestamp_to_datetime(timestamp):
@@ -57,11 +34,16 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
     def ros_point_to_tensor(point):
         return torch.tensor([point.x, point.y, point.z])
 
+    def receive_messages(self) -> List[CommMessage]:
+        raise NotImplementedError()
+
+    def transmit_message(self, msg: CommMessage) -> None:
+        raise NotImplementedError()
+
     def step(
         self, controllable_agents: List[str], state_dict: Dict[str, Dict]
     ) -> Dict[str, bool]:
         self.update_pubs_and_subs(controllable_agents)
-        self.update_msg_subscribers()
         self.update_current_side()
 
         if len(self._current_states) != len(controllable_agents):
@@ -78,13 +60,13 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
             own_msg.stamp = self.get_clock().now().to_msg()
             own_msg.pos.x = float(obs["pos"][0, 0, 0])
             own_msg.pos.y = float(obs["pos"][0, 0, 1])
-            self.msg_publisher.publish(own_msg)
+            self.transmit_message(own_msg)
 
             own_time = self.ros_timestamp_to_datetime(own_msg.stamp)
             own_pos = self.ros_point_to_tensor(own_msg.pos)
 
             aggr = self.model.nns.gnn(torch.zeros(32))
-            for neighbor_msg in self.msg_buffer.values():
+            for neighbor_msg in self.receive_messages():
                 msg_pos = self.ros_point_to_tensor(neighbor_msg.pos)
                 msg_dist = torch.linalg.norm(own_pos - msg_pos)
                 if msg_dist > self.get_parameter("comm_range").value:
@@ -102,15 +84,56 @@ class AgentDecentralizedGNNPassage(AgentGNNPassage):
         ref_state = self.compute_ref_state(logit, obs["vel"][0, 0])
         self._vel_pubs[self.uuid].publish(ref_state)
 
-        self.msg_buffer = {}
-
         return self.compute_dones(obs, controllable_agents)
 
     def get_controllable_agents(self) -> List[str]:
         return [self.uuid]
 
 
+class AgentDecentralizedGNNPassageROS(AgentDecentralizedGNNPassage):
+
+    msg_subscribers = {}
+    msg_buffer = {}
+    msg_publisher = None
+
+    def __init__(self):
+        super().__init__()
+
+        self.msg_publisher = self.create_publisher(
+            CommMessage, "comm_msg", qos_profile=msg_qos_profile
+        )
+
+    def receive_messages(self) -> List[CommMessage]:
+        msgs = list(self.msg_buffer.values())
+        self.msg_buffer = {}
+        return msgs
+
+    def transmit_message(self, msg: CommMessage) -> None:
+        self.msg_publisher.publish(msg)
+
+    def ros_msg_receive(self, uuid, msg):
+        self.msg_buffer[uuid] = msg
+
+    def update_msg_subscribers(self):
+        for uuid in get_uuids_fast(self):
+            if uuid == self.uuid or uuid in self.msg_subscribers:
+                continue
+
+            self.msg_subscribers[uuid] = self.create_subscription(
+                CommMessage,
+                f"/{uuid}/comm_msg",
+                partial(self.ros_msg_receive, uuid),
+                qos_profile=msg_qos_profile,
+            )
+
+    def step(
+        self, controllable_agents: List[str], state_dict: Dict[str, Dict]
+    ) -> Dict[str, bool]:
+        self.update_msg_subscribers()
+        return super().step(controllable_agents, state_dict)
+
+
 def main() -> None:
     rclpy.init()
-    g = AgentDecentralizedGNNPassage()
+    g = AgentDecentralizedGNNPassageROS()
     rclpy.spin(g)
