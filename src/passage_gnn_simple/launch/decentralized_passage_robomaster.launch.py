@@ -36,10 +36,10 @@ def generate_launch_description():
         ld.append(
             Node(
                 package="passage_gnn_simple",
-                executable="decentralized_passage_comms_relay",
+                executable="decentralized_passage",
                 namespace=uuid,
                 parameters=[{
-                    "model_path": "src/passage_gnn_simple/models/9fa6b_4900.pt",
+                    "model_path": "src/passage_gnn_simple/models/8e2d2_4899.pt",
                     "uuid": uuid,
                     "cycle_frequency": 20,
                     "max_v": 1.5,

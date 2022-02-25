@@ -22,7 +22,7 @@ launch:
       output: "screen"
       param:
         - name:   "model_path"
-          value:  "src/passage_gnn_simple/models/9fa6b_4900.pt"
+          value:  "src/passage_gnn_simple/models/8e2d2_4899.pt"
         - name: "max_v"
           value: 1.5
         - name: "max_a"
