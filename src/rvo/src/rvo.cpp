@@ -263,7 +263,7 @@ void RVONavigator::sendReference()
 
             case Agent::State::move_waypoints:
                 {
-                    const auto dp = agents_[i]->waypoints[0] - p;
+                    const auto dp = agents_[i]->waypoints.front() - p;
                     v_ref = normalize(dp) * sim.getAgentMaxSpeed(i);
 
                     if (abs(dp) < get_parameter("waypoint_reached_dist").get_value<float>())
@@ -286,7 +286,7 @@ void RVONavigator::sendReference()
             case Agent::State::move_goal:
             case Agent::State::reached_goal:
                 {
-                    const auto dp = agents_[i]->waypoints[0] - p;
+                    const auto dp = agents_[i]->waypoints.front() - p;
                     const auto v_max = sim.getAgentMaxSpeed(i);
                     v_ref = clamp(2 * dp, -v_max, v_max);
 
@@ -361,7 +361,7 @@ void RVONavigator::sendReference()
                         v_des = v_des_constr;
                     }
 
-                    const auto dist_goal = abs(agents_[i]->waypoints[0] - agents_[i]->getPosition());
+                    const auto dist_goal = abs(agents_[i]->waypoints.back() - agents_[i]->getPosition());
 
                     if (abs(agents_[i]->avg_velocity) < 0.01f && dist_goal > 1.0f)
                     {
