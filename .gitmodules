@@ -1,12 +1,9 @@
 [submodule "simple_simulator"]
 	path = src/simple_simulator
-	url = ../../ros2_packages/simple_simulator.git
-[submodule "src/emergency_stop_msgs"]
-	path = src/emergency_stop_msgs
-	url = ../../ros2_packages/emergency_stop_msgs.git
+	url = git@github.com:proroklab/ros2_point_robot_simulator.git
 [submodule "src/robomaster_msgs"]
 	path = src/robomaster_msgs
-	url = ../../ros2_packages/robomaster_msgs.git
+	url = git@github.com:proroklab/ros2_robomaster_msgs.git
 [submodule "src/Freyja"]
 	path = src/Freyja
 	url = https://github.com/unl-nimbus-lab/Freyja.git

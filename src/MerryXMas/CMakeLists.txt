@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(merry_xmas)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++14)
+add_compile_options(-std=c++17)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
