@@ -1,5 +1,9 @@
 # Decentralized multi-agent control using GNNs for ICRA 2022
-Repository containing the code base for evaluating the multi-agent coordination policy used in the paper "A Framework for Real-World Multi-Robot Systems Running Decentralized GNN-Based Policies".
+Repository containing the code base for evaluating the multi-agent coordination policy used in the paper "[A Framework for Real-World Multi-Robot Systems Running Decentralized GNN-Based Policies](https://arxiv.org/abs/2111.01777)".
+
+Supplementary video material:
+
+[![Video preview](https://img.youtube.com/vi/COh-WLn4iO4/0.jpg)](https://www.youtube.com/watch?v=COh-WLn4iO4)
 
 ## Citation
 If you use any part of this code in your research, please cite our paper:
